@@ -133,7 +133,7 @@ export function parseSpec(json: string): AutomatonSpec {
     return {
       id: str(sp.id, `spinner[${i}].id`),
       position: num(sp.position, `spinner[${i}].position`, 0, 1),
-      ratio: num(sp.ratio, `spinner[${i}].ratio`, -10, 10),
+      ratio: num(sp.ratio, `spinner[${i}].ratio`, 0.2, 10),
       wheelRadius: num(sp.wheelRadius, `spinner[${i}].wheelRadius`, 4, 60),
       platformRadius: num(sp.platformRadius, `spinner[${i}].platformRadius`, 5, 120),
     }
