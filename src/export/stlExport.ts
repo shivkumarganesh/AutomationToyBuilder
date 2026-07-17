@@ -269,17 +269,67 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
     parts.push({ name: `spinner-spindle-${sp.id}`, geometry: merge([rod, driven, platform]) })
   }
 
-  // Character figure blocks: body + head, printed upright.
+  // Character figures, printed upright. Articulated figures ship as a
+  // body (with its static head only when no head limb replaces it) plus
+  // one flat plate per limb, each carrying a pivot hole and a drive-pin
+  // hole exactly crankArm apart — the joint geometry is cut into the part.
   for (const c of spec.characters) {
     const body = new BoxGeometry(c.width, c.depth, c.height)
     place(body, 0, 0, c.height / 2)
-    const headSize = c.width * 0.55
-    const head = new BoxGeometry(headSize, headSize, headSize)
-    place(head, 0, 0, c.height + headSize / 2)
-    parts.push({ name: `figure-${c.id}`, geometry: merge([body, head]) })
+    const bodyPieces = [body]
+    const hasHeadLimb = c.kind === 'articulated' && (c.limbs ?? []).some((l) => l.kind === 'head')
+    if (!hasHeadLimb) {
+      const headSize = c.width * 0.55
+      const head = new BoxGeometry(headSize, headSize, headSize)
+      place(head, 0, 0, c.height + headSize / 2)
+      bodyPieces.push(head)
+    }
+    parts.push({ name: `figure-${c.id}`, geometry: merge(bodyPieces) })
+
+    if (c.kind !== 'articulated') continue
+    for (const limb of c.limbs ?? []) {
+      const plate = limbPlate(limb, clearance)
+      if (limb.kind === 'wings') {
+        // the plate is symmetric about its centreline, so the left wing is
+        // the same flat part flipped over — print two identical plates
+        parts.push({ name: `${limb.id}-left`, geometry: plate })
+        parts.push({ name: `${limb.id}-right`, geometry: plate.clone() })
+      } else {
+        parts.push({ name: limb.id, geometry: plate })
+      }
+    }
   }
 
   return parts
+}
+
+const LIMB_PLATE_THICKNESS = 3
+const LIMB_PIVOT_HOLE_R = 1.5
+const LIMB_PIN_HOLE_R = 1.2
+
+/**
+ * Flat limb plate: rounded paddle from the drive pin hole (at −crankArm)
+ * through the pivot hole (at the origin) out to the tip (at +length),
+ * printed flat. Hole spacing IS the linkage geometry.
+ */
+function limbPlate(
+  limb: { length: number; width: number; crankArm: number },
+  clearance: number,
+): BufferGeometry {
+  const halfW = Math.max(limb.width / 2, 4)
+  const shape = new Shape()
+  shape.moveTo(-limb.crankArm, -halfW / 2)
+  shape.lineTo(limb.length, -halfW)
+  shape.absarc(limb.length, 0, halfW, -Math.PI / 2, Math.PI / 2, false)
+  shape.lineTo(-limb.crankArm, halfW / 2)
+  shape.absarc(-limb.crankArm, 0, halfW / 2, Math.PI / 2, (3 * Math.PI) / 2, false)
+  shape.closePath()
+  const pivot = new Shape()
+  pivot.absarc(0, 0, LIMB_PIVOT_HOLE_R + clearance, 0, Math.PI * 2, true)
+  const pin = new Shape()
+  pin.absarc(-limb.crankArm, 0, LIMB_PIN_HOLE_R + clearance, 0, Math.PI * 2, true)
+  shape.holes.push(pivot, pin)
+  return new ExtrudeGeometry(shape, { depth: LIMB_PLATE_THICKNESS, bevelEnabled: false })
 }
 
 /** Single binary STL with all parts spaced out on the build plate. */

@@ -465,6 +465,102 @@ export const steppingOwl: AutomatonSpec = {
   },
 }
 
+/**
+ * Flapping Bird — the seventh toy, introducing ARTICULATED characters:
+ * the figure itself stays fixed on its stand while pivot-jointed limbs
+ * move. An eccentric cam's pushrod drives a wire yoke that flaps both
+ * wings and nods the head (asin(d / crankArm) joints, mirrored shoulders),
+ * while a petal cam wags the tail three times per crank turn through a
+ * bent overhead wire crank.
+ */
+export const flappingBird: AutomatonSpec = {
+  name: 'Flapping Bird',
+  frame: {
+    width: 170,
+    depth: 85,
+    height: 105,
+    materialThickness: 3,
+  },
+  mechanism: {
+    shaftDiameter: 6,
+    shaftHeight: 48,
+    crank: {
+      armLength: 25,
+      handleLength: 30,
+      handleDiameter: 10,
+    },
+    cams: [
+      {
+        id: 'cam-flap',
+        kind: 'eccentric',
+        radius: 18,
+        eccentricity: 7,
+        position: 0.42,
+        phaseDeg: 0,
+        thickness: 6,
+      },
+      {
+        id: 'cam-wag',
+        kind: 'petal',
+        baseRadius: 14,
+        lift: 6,
+        lobes: 3,
+        position: 0.58,
+        phaseDeg: 60,
+        thickness: 6,
+      },
+    ],
+    pushrods: [
+      { id: 'rod-flap', camId: 'cam-flap', rodWidth: 6, padWidth: 24, length: 62 },
+      { id: 'rod-wag', camId: 'cam-wag', rodWidth: 6, padWidth: 12, length: 58 },
+    ],
+    rockers: [],
+    spinners: [],
+  },
+  characters: [
+    {
+      id: 'figure-bird',
+      channelId: 'rod-flap',
+      kind: 'articulated',
+      width: 20,
+      height: 28,
+      depth: 16,
+      color: '#4f8fe0',
+      label: 'Bird',
+      limbs: [
+        {
+          id: 'limb-wings',
+          channelId: 'rod-flap',
+          kind: 'wings',
+          length: 34,
+          width: 12,
+          crankArm: 10,
+        },
+        {
+          id: 'limb-head',
+          channelId: 'rod-flap',
+          kind: 'head',
+          length: 12,
+          width: 10,
+          crankArm: 12,
+        },
+        {
+          id: 'limb-tail',
+          channelId: 'rod-wag',
+          kind: 'tail',
+          length: 18,
+          width: 9,
+          crankArm: 6,
+        },
+      ],
+    },
+  ],
+  export: {
+    kerf: 0.1,
+    fdmClearance: 0.2,
+  },
+}
+
 export const templates: Record<string, AutomatonSpec> = {
   simplest: simplestAutomaton,
   woodpecker: snailWoodpecker,
@@ -472,4 +568,5 @@ export const templates: Record<string, AutomatonSpec> = {
   hummingbird: gearedHummingbird,
   carousel: bevelCarousel,
   owl: steppingOwl,
+  bird: flappingBird,
 }

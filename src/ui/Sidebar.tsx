@@ -1,6 +1,6 @@
-import type { CamSpec } from '../model/types'
+import type { CamSpec, CharacterSpec, LimbKind } from '../model/types'
 import { gearRatio, layshaftY, spinnerRatio } from '../model/types'
-import { channelCount, MAX_CHANNELS, useDesignerStore } from '../model/store'
+import { channelCount, MAX_CHANNELS, MAX_LIMBS, useDesignerStore } from '../model/store'
 import { NumberField } from './NumberField'
 import { ExportPanel } from './ExportPanel'
 import { SavePanel } from './SavePanel'
@@ -145,6 +145,144 @@ function CamControls({ cam, removable }: { cam: CamSpec; removable: boolean }) {
   )
 }
 
+/** Every output channel id a figure or limb can bind to. */
+function useChannelIds(): string[] {
+  const mech = useDesignerStore((s) => s.spec.mechanism)
+  return [
+    ...mech.pushrods.map((r) => r.id),
+    ...mech.rockers.map((r) => r.id),
+    ...mech.spinners.map((sp) => sp.id),
+  ]
+}
+
+function CharacterControls({ character: ch }: { character: CharacterSpec }) {
+  const updateCharacter = useDesignerStore((s) => s.updateCharacter)
+  const removeCharacter = useDesignerStore((s) => s.removeCharacter)
+  const setCharacterKind = useDesignerStore((s) => s.setCharacterKind)
+  const addLimb = useDesignerStore((s) => s.addLimb)
+  const updateLimb = useDesignerStore((s) => s.updateLimb)
+  const removeLimb = useDesignerStore((s) => s.removeLimb)
+  const channelIds = useChannelIds()
+  const limbs = ch.limbs ?? []
+  return (
+    <div>
+      <div className="subhead">
+        {ch.label} ·
+        <select
+          style={{ marginLeft: 6 }}
+          title="Rigid block or articulated (jointed limbs)"
+          value={ch.kind}
+          onChange={(e) => setCharacterKind(ch.id, e.target.value as CharacterSpec['kind'])}
+        >
+          <option value="block">Block</option>
+          <option value="articulated">Articulated</option>
+        </select>
+        <select
+          style={{ marginLeft: 6 }}
+          title="Output channel this figure rides"
+          value={ch.channelId}
+          onChange={(e) => updateCharacter(ch.id, { channelId: e.target.value })}
+        >
+          {channelIds.map((id) => (
+            <option key={id} value={id}>
+              {id}
+            </option>
+          ))}
+        </select>
+        <input
+          type="color"
+          value={ch.color}
+          style={{ marginLeft: 8, verticalAlign: 'middle' }}
+          onChange={(e) => updateCharacter(ch.id, { color: e.target.value })}
+        />
+        <button
+          className="icon-btn"
+          title="Remove this figure"
+          onClick={() => removeCharacter(ch.id)}
+        >
+          ✕
+        </button>
+      </div>
+      <NumberField
+        label="Height"
+        value={ch.height}
+        min={10}
+        max={60}
+        onChange={(v) => updateCharacter(ch.id, { height: v })}
+      />
+      <NumberField
+        label="Width"
+        value={ch.width}
+        min={8}
+        max={50}
+        onChange={(v) => updateCharacter(ch.id, { width: v })}
+      />
+      {ch.kind === 'articulated' && (
+        <>
+          {limbs.map((limb) => (
+            <div key={limb.id} style={{ marginLeft: 8 }}>
+              <div className="subhead">
+                {limb.id} ·
+                <select
+                  style={{ marginLeft: 6 }}
+                  value={limb.kind}
+                  onChange={(e) =>
+                    updateLimb(ch.id, limb.id, { kind: e.target.value as LimbKind })
+                  }
+                >
+                  <option value="wings">Wings</option>
+                  <option value="head">Head</option>
+                  <option value="tail">Tail</option>
+                </select>
+                <select
+                  style={{ marginLeft: 6 }}
+                  title="Channel that drives this joint"
+                  value={limb.channelId}
+                  onChange={(e) => updateLimb(ch.id, limb.id, { channelId: e.target.value })}
+                >
+                  {channelIds.map((id) => (
+                    <option key={id} value={id}>
+                      {id}
+                    </option>
+                  ))}
+                </select>
+                {limbs.length > 1 && (
+                  <button
+                    className="icon-btn"
+                    title="Remove this limb"
+                    onClick={() => removeLimb(ch.id, limb.id)}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <NumberField
+                label="Limb length"
+                value={limb.length}
+                min={5}
+                max={60}
+                onChange={(v) => updateLimb(ch.id, limb.id, { length: v })}
+              />
+              <NumberField
+                label="Crank arm (bigger = smaller swing)"
+                value={limb.crankArm}
+                min={3}
+                max={40}
+                onChange={(v) => updateLimb(ch.id, limb.id, { crankArm: v })}
+              />
+            </div>
+          ))}
+          {limbs.length < MAX_LIMBS && (
+            <button onClick={() => addLimb(ch.id)} style={{ width: '100%', marginTop: 2 }}>
+              + Add limb
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 /**
  * Parameter panel, organised to mirror the architecture: the frame
  * boundary, the mechanism zone inside it, the characters above it, and
@@ -155,7 +293,6 @@ export function Sidebar() {
   const updateFrame = useDesignerStore((s) => s.updateFrame)
   const updateMechanism = useDesignerStore((s) => s.updateMechanism)
   const updatePushrod = useDesignerStore((s) => s.updatePushrod)
-  const updateCharacter = useDesignerStore((s) => s.updateCharacter)
   const addCam = useDesignerStore((s) => s.addCam)
   const addRocker = useDesignerStore((s) => s.addRocker)
   const addSpinner = useDesignerStore((s) => s.addSpinner)
@@ -163,7 +300,6 @@ export function Sidebar() {
   const updateRocker = useDesignerStore((s) => s.updateRocker)
   const updateSpinner = useDesignerStore((s) => s.updateSpinner)
   const addCharacter = useDesignerStore((s) => s.addCharacter)
-  const removeCharacter = useDesignerStore((s) => s.removeCharacter)
   const addGearTrain = useDesignerStore((s) => s.addGearTrain)
   const updateGearTrain = useDesignerStore((s) => s.updateGearTrain)
   const removeGearTrain = useDesignerStore((s) => s.removeGearTrain)
@@ -467,49 +603,7 @@ export function Sidebar() {
         <summary>Characters (above the stage)</summary>
         <div className="section-body">
           {spec.characters.map((ch) => (
-            <div key={ch.id}>
-              <div className="subhead">
-                {ch.label} · rides
-                <select
-                  style={{ marginLeft: 6 }}
-                  value={ch.channelId}
-                  onChange={(e) => updateCharacter(ch.id, { channelId: e.target.value })}
-                >
-                  {spec.mechanism.pushrods.map((rod) => (
-                    <option key={rod.id} value={rod.id}>
-                      {rod.id}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="color"
-                  value={ch.color}
-                  style={{ marginLeft: 8, verticalAlign: 'middle' }}
-                  onChange={(e) => updateCharacter(ch.id, { color: e.target.value })}
-                />
-                <button
-                  className="icon-btn"
-                  title="Remove this figure"
-                  onClick={() => removeCharacter(ch.id)}
-                >
-                  ✕
-                </button>
-              </div>
-              <NumberField
-                label="Height"
-                value={ch.height}
-                min={10}
-                max={60}
-                onChange={(v) => updateCharacter(ch.id, { height: v })}
-              />
-              <NumberField
-                label="Width"
-                value={ch.width}
-                min={8}
-                max={50}
-                onChange={(v) => updateCharacter(ch.id, { width: v })}
-              />
-            </div>
+            <CharacterControls key={ch.id} character={ch} />
           ))}
           <button onClick={addCharacter} style={{ width: '100%', marginTop: 4 }}>
             + Add figure

@@ -205,18 +205,47 @@ export interface MechanismSpec {
   spinners: SpinnerSpec[]
 }
 
+export type LimbKind = 'wings' | 'head' | 'tail'
+
+/**
+ * A pivot-jointed limb on an articulated figure, driven by one output
+ * channel through a pin-and-wire linkage: the wire from the channel's
+ * output tip ends in a pin riding the limb's crank arm, so a vertical
+ * displacement d rotates the joint by asin(d / crankArm). The crank arm
+ * is the ONLY linkage dimension — the whole motion mapping derives from
+ * it and the channel's displacement table, never from free numbers.
+ */
+export interface LimbSpec {
+  id: string
+  /** Output channel whose displacement drives this joint. */
+  channelId: string
+  kind: LimbKind
+  /** Pivot-to-tip length of the limb plate. */
+  length: number
+  /** Chord (width) of the limb plate. */
+  width: number
+  /** Pivot-to-drive-pin distance. Must exceed the channel's half-travel or the linkage locks. */
+  crankArm: number
+}
+
 /** Everything above the stage plate. */
 export interface CharacterSpec {
   id: string
-  /** Output channel (pushrod id) this character rides. */
+  /** Output channel this character stands over (and its default limb driver). */
   channelId: string
-  /** v1 ships simple blocks; articulated figures come with later toys. */
-  kind: 'block'
+  /**
+   * block: a rigid figure riding its channel bodily.
+   * articulated: a figure fixed on a stand whose LIMBS move — each limb
+   * pivots on the body and is driven by a channel through a wire linkage.
+   */
+  kind: 'block' | 'articulated'
   width: number
   height: number
   depth: number
   color: string
   label: string
+  /** articulated only: the jointed limbs. */
+  limbs?: LimbSpec[]
 }
 
 export interface ExportSettings {

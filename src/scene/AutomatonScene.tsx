@@ -13,6 +13,7 @@ import { Pushrod } from './mechanism/Pushrod'
 import { Rocker } from './mechanism/Rocker'
 import { Spinner } from './mechanism/Spinner'
 import { FigureBlock } from './character/FigureBlock'
+import { ArticulatedFigure } from './character/ArticulatedFigure'
 
 /**
  * The 3D view, composed as the two zones joined by the frame:
@@ -65,6 +66,16 @@ export function AutomatonScene() {
           const siblings = spec.characters.filter((c) => c.channelId === character.channelId)
           const index = siblings.indexOf(character)
           const zOffset = (index - (siblings.length - 1) / 2) * (character.depth + 4)
+          if (character.kind === 'articulated') {
+            return (
+              <ArticulatedFigure
+                key={character.id}
+                character={character}
+                signals={channels}
+                zOffset={zOffset}
+              />
+            )
+          }
           return (
             <FigureBlock
               key={character.id}

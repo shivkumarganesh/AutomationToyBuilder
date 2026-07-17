@@ -6,6 +6,7 @@ import type {
   ExportSettings,
   FrameSpec,
   GearTrainSpec,
+  LimbSpec,
   MechanismSpec,
   PushrodSpec,
   RockerSpec,
@@ -57,7 +58,15 @@ interface DesignerState {
   /** Add a figure bound to the first output channel. */
   addCharacter: () => void
   removeCharacter: (id: string) => void
+  /** Convert a figure between rigid block and articulated (jointed limbs). */
+  setCharacterKind: (id: string, kind: CharacterSpec['kind']) => void
+  /** Add a limb to an articulated figure (next unused kind, bound to its channel). */
+  addLimb: (characterId: string) => void
+  updateLimb: (characterId: string, limbId: string, patch: Partial<LimbSpec>) => void
+  removeLimb: (characterId: string, limbId: string) => void
 }
+
+export const MAX_LIMBS = 3
 
 /** Chart palette carries four validated series slots; the box also gets crowded. */
 export const MAX_CHANNELS = 4
@@ -76,6 +85,7 @@ function nextIndex(spec: AutomatonSpec): number {
     ...spec.mechanism.rockers.map((r) => r.id),
     ...spec.mechanism.spinners.map((r) => r.id),
     ...spec.characters.map((c) => c.id),
+    ...spec.characters.flatMap((c) => (c.limbs ?? []).map((l) => l.id)),
   ]
   let max = 0
   for (const id of ids) {
@@ -105,6 +115,23 @@ function freeShaftPosition(spec: AutomatonSpec): number {
 }
 
 const FIGURE_COLORS = ['#4fb06a', '#8a6fe8', '#e0764f', '#4fa9c9', '#c94f8e']
+
+/**
+ * Drop characters riding removed channels, and strip limbs whose drive
+ * channel was removed from figures that survive.
+ */
+function pruneCharacters(
+  characters: CharacterSpec[],
+  removedChannelIds: string[],
+): CharacterSpec[] {
+  return characters
+    .filter((c) => !removedChannelIds.includes(c.channelId))
+    .map((c) =>
+      c.limbs?.some((l) => removedChannelIds.includes(l.channelId))
+        ? { ...c, limbs: c.limbs.filter((l) => !removedChannelIds.includes(l.channelId)) }
+        : c,
+    )
+}
 
 const TWO_PI = Math.PI * 2
 // Wrap the accumulating crank angle only after many whole revolutions:
@@ -323,7 +350,7 @@ export const useDesignerStore = create<DesignerState>((set) => ({
             pushrods: s.spec.mechanism.pushrods.filter((r) => r.camId !== id),
             rockers: s.spec.mechanism.rockers.filter((r) => r.camId !== id),
           },
-          characters: s.spec.characters.filter((c) => !removedChannels.includes(c.channelId)),
+          characters: pruneCharacters(s.spec.characters, removedChannels),
         },
       }
     }),
@@ -338,7 +365,7 @@ export const useDesignerStore = create<DesignerState>((set) => ({
             ...s.spec.mechanism,
             spinners: s.spec.mechanism.spinners.filter((sp) => sp.id !== id),
           },
-          characters: s.spec.characters.filter((c) => c.channelId !== id),
+          characters: pruneCharacters(s.spec.characters, [id]),
         },
       }
     }),
@@ -407,6 +434,77 @@ export const useDesignerStore = create<DesignerState>((set) => ({
   removeCharacter: (id) =>
     set((s) => ({
       spec: { ...s.spec, characters: s.spec.characters.filter((c) => c.id !== id) },
+    })),
+
+  setCharacterKind: (id, kind) =>
+    set((s) => ({
+      spec: {
+        ...s.spec,
+        characters: s.spec.characters.map((c) => {
+          if (c.id !== id || c.kind === kind) return c
+          if (kind === 'block') {
+            const { limbs: _limbs, ...rest } = c
+            return { ...rest, kind }
+          }
+          // starting limb: wings driven by the figure's own channel
+          const wings: LimbSpec = {
+            id: `limb-${nextIndex(s.spec)}`,
+            channelId: c.channelId,
+            kind: 'wings',
+            length: Math.round(c.width * 1.6),
+            width: Math.max(8, Math.round(c.depth * 0.75)),
+            crankArm: 10,
+          }
+          return { ...c, kind, limbs: [wings] }
+        }),
+      },
+    })),
+
+  addLimb: (characterId) =>
+    set((s) => ({
+      spec: {
+        ...s.spec,
+        characters: s.spec.characters.map((c) => {
+          if (c.id !== characterId || c.kind !== 'articulated') return c
+          const limbs = c.limbs ?? []
+          if (limbs.length >= MAX_LIMBS) return c
+          const kinds: LimbSpec['kind'][] = ['wings', 'head', 'tail']
+          const kind = kinds.find((k) => !limbs.some((l) => l.kind === k)) ?? 'wings'
+          const limb: LimbSpec = {
+            id: `limb-${nextIndex(s.spec)}`,
+            channelId: c.channelId,
+            kind,
+            length: kind === 'wings' ? Math.round(c.width * 1.6) : Math.round(c.depth * 1.1),
+            width: Math.max(8, Math.round(c.depth * 0.75)),
+            crankArm: 10,
+          }
+          return { ...c, limbs: [...limbs, limb] }
+        }),
+      },
+    })),
+
+  updateLimb: (characterId, limbId, patch) =>
+    set((s) => ({
+      spec: {
+        ...s.spec,
+        characters: s.spec.characters.map((c) =>
+          c.id === characterId && c.limbs
+            ? { ...c, limbs: c.limbs.map((l) => (l.id === limbId ? { ...l, ...patch } : l)) }
+            : c,
+        ),
+      },
+    })),
+
+  removeLimb: (characterId, limbId) =>
+    set((s) => ({
+      spec: {
+        ...s.spec,
+        characters: s.spec.characters.map((c) =>
+          c.id === characterId && c.limbs
+            ? { ...c, limbs: c.limbs.filter((l) => l.id !== limbId) }
+            : c,
+        ),
+      },
     })),
 }))
 

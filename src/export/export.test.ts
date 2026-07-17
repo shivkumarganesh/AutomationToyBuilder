@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bevelCarousel, simplestAutomaton } from '../model/templates'
+import { bevelCarousel, flappingBird, simplestAutomaton } from '../model/templates'
 import { crownPitchRadius } from '../scene/spinnerLayout'
 import { camWorldX, outputChannels } from '../model/types'
 import { flatPackSvg, generateParts } from './svgFlatPack'
@@ -153,6 +153,46 @@ describe('STL export', () => {
     const triangles = view.getUint32(80, true)
     expect(triangles).toBeGreaterThan(100)
     expect(data.byteLength).toBe(84 + triangles * 50)
+  })
+})
+
+describe('articulated figure print parts', () => {
+  const parts = buildPrintParts(flappingBird)
+  const bird = flappingBird.characters[0]
+
+  it('exports the body plus one plate per limb (two for wings)', () => {
+    const names = parts.map((p) => p.name)
+    expect(names).toContain('figure-figure-bird')
+    expect(names).toContain('limb-wings-left')
+    expect(names).toContain('limb-wings-right')
+    expect(names).toContain('limb-head')
+    expect(names).toContain('limb-tail')
+  })
+
+  it('wing plates are identical parts — flat and flippable', () => {
+    const left = parts.find((p) => p.name === 'limb-wings-left')!
+    const right = parts.find((p) => p.name === 'limb-wings-right')!
+    left.geometry.computeBoundingBox()
+    right.geometry.computeBoundingBox()
+    expect(left.geometry.boundingBox).toEqual(right.geometry.boundingBox)
+  })
+
+  it('limb plates span crank arm + length: the linkage is cut into the part', () => {
+    const wings = bird.limbs!.find((l) => l.kind === 'wings')!
+    const plate = parts.find((p) => p.name === 'limb-wings-left')!
+    plate.geometry.computeBoundingBox()
+    const bb = plate.geometry.boundingBox!
+    // from the pin-end round cap to the tip round cap
+    const expected = wings.crankArm + wings.width / 4 + wings.length + wings.width / 2
+    expect(bb.max.x - bb.min.x).toBeCloseTo(expected, 3)
+  })
+
+  it('the bird body ships without a rigid head — the head limb replaces it', () => {
+    const body = parts.find((p) => p.name === 'figure-figure-bird')!
+    body.geometry.computeBoundingBox()
+    const bb = body.geometry.boundingBox!
+    // just the body box: no head block stacked on top
+    expect(bb.max.z - bb.min.z).toBeCloseTo(bird.height, 3)
   })
 })
 

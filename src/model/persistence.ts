@@ -1,4 +1,4 @@
-import type { AutomatonSpec, CamSpec, GearTrainSpec } from './types'
+import type { AutomatonSpec, CamSpec, CharacterSpec, GearTrainSpec, LimbSpec } from './types'
 import { layshaftY } from './types'
 import { simplestAutomaton } from './templates'
 
@@ -191,13 +191,15 @@ export function parseSpec(json: string): AutomatonSpec {
   if (rodIds.size !== pushrods.length + rockers.length + spinners.length)
     fail('output channel ids must be unique')
 
-  const characters = o.characters.map((raw, i) => {
+  const characters = o.characters.map((raw, i): CharacterSpec => {
     const c = raw as Record<string, unknown>
     if (typeof c !== 'object' || c === null) fail(`character[${i}] must be an object`)
-    const ch = {
+    if (c.kind !== undefined && c.kind !== 'block' && c.kind !== 'articulated')
+      fail(`character[${i}].kind unknown`)
+    const ch: CharacterSpec = {
       id: str(c.id, `character[${i}].id`),
       channelId: str(c.channelId, `character[${i}].channelId`),
-      kind: 'block' as const,
+      kind: c.kind === 'articulated' ? 'articulated' : 'block',
       width: num(c.width, `character[${i}].width`, 4, 100),
       height: num(c.height, `character[${i}].height`, 4, 150),
       depth: num(c.depth, `character[${i}].depth`, 4, 100),
@@ -205,6 +207,30 @@ export function parseSpec(json: string): AutomatonSpec {
       label: str(c.label, `character[${i}].label`),
     }
     if (!rodIds.has(ch.channelId)) fail(`character[${i}] rides unknown channel ${ch.channelId}`)
+    if (ch.kind === 'articulated') {
+      if (!Array.isArray(c.limbs) || c.limbs.length < 1 || c.limbs.length > 3)
+        fail(`character[${i}].limbs must carry 1–3 limbs`)
+      const limbs = c.limbs.map((rawLimb, j): LimbSpec => {
+        const l = rawLimb as Record<string, unknown>
+        if (typeof l !== 'object' || l === null) fail(`character[${i}].limbs[${j}] must be an object`)
+        if (l.kind !== 'wings' && l.kind !== 'head' && l.kind !== 'tail')
+          fail(`character[${i}].limbs[${j}].kind unknown`)
+        const limb: LimbSpec = {
+          id: str(l.id, `character[${i}].limbs[${j}].id`),
+          channelId: str(l.channelId, `character[${i}].limbs[${j}].channelId`),
+          kind: l.kind,
+          length: num(l.length, `character[${i}].limbs[${j}].length`, 5, 80),
+          width: num(l.width, `character[${i}].limbs[${j}].width`, 2, 40),
+          crankArm: num(l.crankArm, `character[${i}].limbs[${j}].crankArm`, 3, 40),
+        }
+        if (!rodIds.has(limb.channelId))
+          fail(`character[${i}].limbs[${j}] driven by unknown channel ${limb.channelId}`)
+        return limb
+      })
+      if (new Set(limbs.map((l) => l.id)).size !== limbs.length)
+        fail(`character[${i}] limb ids must be unique`)
+      ch.limbs = limbs
+    }
     return ch
   })
 
