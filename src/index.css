@@ -57,6 +57,15 @@ body,
   font-size: 12px;
 }
 
+.app-header select {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
 .sidebar {
   grid-area: sidebar;
   overflow-y: auto;
