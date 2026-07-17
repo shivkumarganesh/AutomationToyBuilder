@@ -5,6 +5,7 @@ import type {
   CharacterSpec,
   ExportSettings,
   FrameSpec,
+  GearTrainSpec,
   MechanismSpec,
   PushrodSpec,
   RockerSpec,
@@ -48,6 +49,11 @@ interface DesignerState {
   /** Remove a cam with its pushrods/rockers and any characters on those channels. */
   removeCam: (id: string) => void
   removeSpinner: (id: string) => void
+  /** Install a layshaft gear train (defaults if none given). */
+  addGearTrain: () => void
+  updateGearTrain: (patch: Partial<GearTrainSpec>) => void
+  /** Remove the gear train; layshaft cams move back to the crankshaft. */
+  removeGearTrain: () => void
   /** Add a figure bound to the first output channel. */
   addCharacter: () => void
   removeCharacter: (id: string) => void
@@ -332,6 +338,46 @@ export const useDesignerStore = create<DesignerState>((set) => ({
         },
       }
     }),
+
+  addGearTrain: () =>
+    set((s) => {
+      if (s.spec.mechanism.gearTrain) return {}
+      const gearTrain: GearTrainSpec = {
+        teethDrive: 24,
+        teethDriven: 12,
+        module: 1.5,
+        position: 0.5,
+      }
+      return { spec: { ...s.spec, mechanism: { ...s.spec.mechanism, gearTrain } } }
+    }),
+
+  updateGearTrain: (patch) =>
+    set((s) => {
+      if (!s.spec.mechanism.gearTrain) return {}
+      return {
+        spec: {
+          ...s.spec,
+          mechanism: {
+            ...s.spec.mechanism,
+            gearTrain: { ...s.spec.mechanism.gearTrain, ...patch },
+          },
+        },
+      }
+    }),
+
+  removeGearTrain: () =>
+    set((s) => ({
+      spec: {
+        ...s.spec,
+        mechanism: {
+          ...s.spec.mechanism,
+          gearTrain: undefined,
+          cams: s.spec.mechanism.cams.map((c) =>
+            c.shaft === 'lay' ? { ...c, shaft: 'crank' as const } : c,
+          ),
+        },
+      },
+    })),
 
   addCharacter: () =>
     set((s) => {

@@ -24,11 +24,13 @@ export function camRadius(cam: CamSpec, phi: number): number {
       return baseRadius + (lift / 2) * (1 - Math.cos(lobes * a))
     }
     case 'snail': {
-      // Archimedean spiral. Wound so that with a counterclockwise crank
-      // (+theta) the follower rises gradually over the revolution, then
-      // drops off the step — never the reverse, which would jam.
+      // Archimedean spiral, wound so the follower always rises gradually
+      // and drops off the step — never the reverse, which would jam. The
+      // crankshaft turns counterclockwise; the gear-driven layshaft
+      // counter-rotates, so a layshaft snail winds the opposite way.
       const { baseRadius, lift } = cam
-      return baseRadius + lift * (1 - a / TWO_PI)
+      const t = cam.shaft === 'lay' ? a / TWO_PI : 1 - a / TWO_PI
+      return baseRadius + lift * t
     }
   }
 }

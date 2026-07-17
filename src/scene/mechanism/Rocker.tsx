@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import type { Group, Mesh } from 'three'
 import type { ChannelSignal } from '../../kinematics/channels'
 import { displacementTable, sampleDisplacement } from '../../kinematics/follower'
+import { camAngularRate, camShaftY } from '../../model/types'
 import { useDesignerStore } from '../../model/store'
 import { BEAM_THICKNESS, PAD_THICKNESS, rockerAngle, rockerPivotY } from '../rockerLayout'
 
@@ -14,16 +15,17 @@ import { BEAM_THICKNESS, PAD_THICKNESS, rockerAngle, rockerPivotY } from '../roc
  */
 export function Rocker({ signal }: { signal: ChannelSignal & { kind: 'tilt' } }) {
   const frame = useDesignerStore((s) => s.spec.frame)
-  const shaftHeight = useDesignerStore((s) => s.spec.mechanism.shaftHeight)
+  const mech = useDesignerStore((s) => s.spec.mechanism)
   const beam = useRef<Group>(null)
   const link = useRef<Mesh>(null)
   const { channel } = signal
   const { leverLength, padWidth } = channel.rocker
+  const shaftHeight = camShaftY(mech, channel.cam)
 
   // lift table of the underlying cam follower — sets the true contact height
   const liftTable = useMemo(
-    () => displacementTable(channel.cam, padWidth),
-    [channel.cam, padWidth],
+    () => displacementTable(channel.cam, padWidth, camAngularRate(mech, channel.cam)),
+    [channel.cam, padWidth, mech],
   )
   const pivotY = rockerPivotY(liftTable, shaftHeight)
   const stageTop = frame.height + frame.materialThickness

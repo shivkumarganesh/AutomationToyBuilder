@@ -46,6 +46,11 @@ interface CamBase {
   phaseDeg: number
   /** Extruded thickness of the cam disc. */
   thickness: number
+  /**
+   * Which shaft carries this cam: the hand-cranked camshaft (default) or
+   * the gear-driven layshaft. Requires a gear train when 'lay'.
+   */
+  shaft?: 'crank' | 'lay'
 }
 
 /** Circular disc mounted off-centre — smooth simple-harmonic rise and fall. */
@@ -130,12 +135,35 @@ export interface CrankSpec {
   handleDiameter: number
 }
 
+/**
+ * A spur gear pair: the drive gear on the crankshaft meshes with the
+ * driven gear on a parallel LAYSHAFT mounted directly below it. Every
+ * mesh property is derived, never free:
+ *   - pitch radius r = module × teeth / 2
+ *   - centre distance = r_drive + r_driven exactly (sets the layshaft height)
+ *   - speed ratio = teethDrive / teethDriven — an INTEGER, so layshaft cam
+ *     motion repeats every crank revolution and stays chartable
+ *   - the shafts counter-rotate
+ */
+export interface GearTrainSpec {
+  /** Teeth on the crankshaft (drive) gear. Must be an integer multiple of teethDriven. */
+  teethDrive: number
+  /** Teeth on the layshaft (driven) gear. */
+  teethDriven: number
+  /** Module: mm of pitch diameter per tooth. Meshing gears must share it. */
+  module: number
+  /** Position along the shafts, fraction of the interior width. */
+  position: number
+}
+
 /** Everything below the stage plate. */
 export interface MechanismSpec {
   shaftDiameter: number
   /** Height of the shaft axis above the ground plane. */
   shaftHeight: number
   crank: CrankSpec
+  /** Optional gear pair driving the layshaft; absent = single-shaft toy. */
+  gearTrain?: GearTrainSpec
   cams: CamSpec[]
   pushrods: PushrodSpec[]
   rockers: RockerSpec[]
@@ -233,4 +261,43 @@ export function camMaxRadius(cam: CamSpec): number {
     case 'snail':
       return cam.baseRadius + cam.lift
   }
+}
+
+/** Pitch radius of a gear: module × teeth / 2. */
+export function pitchRadius(module: number, teeth: number): number {
+  return (module * teeth) / 2
+}
+
+/** Layshaft revolutions per crank revolution (always an integer ≥ 1). */
+export function gearRatio(gear: GearTrainSpec): number {
+  return gear.teethDrive / gear.teethDriven
+}
+
+/**
+ * Height of the layshaft axis: exactly one centre distance (r1 + r2)
+ * below the camshaft, so the gears mesh by construction.
+ */
+export function layshaftY(mech: MechanismSpec): number {
+  const gear = mech.gearTrain
+  if (!gear) throw new Error('no gear train in this mechanism')
+  return (
+    mech.shaftHeight -
+    pitchRadius(gear.module, gear.teethDrive) -
+    pitchRadius(gear.module, gear.teethDriven)
+  )
+}
+
+/** Height of the shaft that carries a given cam. */
+export function camShaftY(mech: MechanismSpec, cam: CamSpec): number {
+  return cam.shaft === 'lay' ? layshaftY(mech) : mech.shaftHeight
+}
+
+/**
+ * Signed cam revolutions per crank revolution: 1 on the crankshaft,
+ * −ratio on the counter-rotating layshaft.
+ */
+export function camAngularRate(mech: MechanismSpec, cam: CamSpec): number {
+  if (cam.shaft !== 'lay') return 1
+  if (!mech.gearTrain) throw new Error(`cam ${cam.id} is on the layshaft but there is no gear train`)
+  return -gearRatio(mech.gearTrain)
 }

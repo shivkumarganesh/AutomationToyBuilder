@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import type { Group } from 'three'
 import type { ChannelSignal } from '../../kinematics/channels'
 import { sampleDisplacement } from '../../kinematics/follower'
+import { camShaftY } from '../../model/types'
 import { useDesignerStore } from '../../model/store'
 
 const PAD_THICKNESS = 4
@@ -12,19 +13,20 @@ const PAD_THICKNESS = 4
  * one output channel through the stage guide slot.
  */
 export function Pushrod({ signal }: { signal: ChannelSignal & { kind: 'lift' } }) {
-  const shaftHeight = useDesignerStore((s) => s.spec.mechanism.shaftHeight)
+  const mech = useDesignerStore((s) => s.spec.mechanism)
   const group = useRef<Group>(null)
   const { channel, table } = signal
   const { rodWidth, padWidth, length } = channel.pushrod
+  const shaftY = camShaftY(mech, channel.cam)
 
   useFrame(() => {
     if (!group.current) return
     const theta = useDesignerStore.getState().crankAngle
-    group.current.position.y = shaftHeight + sampleDisplacement(table, theta)
+    group.current.position.y = shaftY + sampleDisplacement(table, theta)
   })
 
   return (
-    <group ref={group} position={[channel.x, shaftHeight, 0]}>
+    <group ref={group} position={[channel.x, shaftY, 0]}>
       {/* flat follower pad resting on the cam; its width spans world Z,
           matching the cam profile plane */}
       <mesh position={[0, PAD_THICKNESS / 2, 0]}>

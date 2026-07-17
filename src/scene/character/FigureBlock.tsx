@@ -4,6 +4,7 @@ import type { Group } from 'three'
 import type { CharacterSpec } from '../../model/types'
 import type { ChannelSignal } from '../../kinematics/channels'
 import { channelValue } from '../../kinematics/channels'
+import { camShaftY } from '../../model/types'
 import { useDesignerStore } from '../../model/store'
 
 const PAD_THICKNESS = 4
@@ -29,7 +30,7 @@ export function FigureBlock({
   zOffset?: number
 }) {
   const frame = useDesignerStore((s) => s.spec.frame)
-  const shaftHeight = useDesignerStore((s) => s.spec.mechanism.shaftHeight)
+  const mech = useDesignerStore((s) => s.spec.mechanism)
   const group = useRef<Group>(null)
   const { channel } = signal
   const stageTop = frame.height + frame.materialThickness
@@ -42,7 +43,7 @@ export function FigureBlock({
     switch (signal.kind) {
       case 'lift': {
         const rodTopOffset = PAD_THICKNESS + signal.channel.pushrod.length
-        group.current.position.y = shaftHeight + value + rodTopOffset
+        group.current.position.y = camShaftY(mech, signal.channel.cam) + value + rodTopOffset
         break
       }
       case 'tilt':

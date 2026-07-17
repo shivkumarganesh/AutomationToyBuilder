@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { AutomatonSpec } from '../model/types'
 import { outputChannels } from '../model/types'
 import { camOutline } from '../kinematics/camProfile'
+import { gearOutline } from '../kinematics/gearProfile'
 import { drivenDiscRadius } from '../scene/spinnerLayout'
 
 /**
@@ -119,6 +120,29 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
     shape.holes.push(dHole(shaftR + clearance))
     const geo = new ExtrudeGeometry(shape, { depth: cam.thickness, bevelEnabled: false })
     parts.push({ name: `cam-${cam.id}`, geometry: geo })
+  }
+
+  // Gear pair + layshaft: same tooth profiles as the scene, keyed D-holes.
+  if (mech.gearTrain) {
+    const g = mech.gearTrain
+    for (const [name, teeth] of [
+      ['gear-drive', g.teethDrive],
+      ['gear-driven', g.teethDriven],
+    ] as const) {
+      const pts = gearOutline(teeth, g.module)
+      const shape = new Shape()
+      shape.moveTo(pts[0].x, pts[0].y)
+      for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y)
+      shape.closePath()
+      shape.holes.push(dHole(shaftR + clearance))
+      parts.push({
+        name,
+        geometry: new ExtrudeGeometry(shape, { depth: 6, bevelEnabled: false }),
+      })
+    }
+    const lay = new ExtrudeGeometry(dShape(shaftR), { depth: spec.frame.width + 10, bevelEnabled: false })
+    lay.rotateY(Math.PI / 2)
+    parts.push({ name: 'layshaft', geometry: lay })
   }
 
   // Rocker levers: beam + follower pad, printed flat.

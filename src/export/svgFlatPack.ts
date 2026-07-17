@@ -1,6 +1,8 @@
 import type { AutomatonSpec } from '../model/types'
 import { outputChannels } from '../model/types'
+import { layshaftY } from '../model/types'
 import { camOutline, type Point2 } from '../kinematics/camProfile'
+import { gearOutline } from '../kinematics/gearProfile'
 
 /**
  * Laser-cut flat-pack layout of the frame (the zone boundary) and the cams.
@@ -190,8 +192,16 @@ export function generateParts(spec: AutomatonSpec): Part[] {
       top: { type: 'tabs' },
       left: { type: 'finger', phase: 0 },
     })
-    const bearing = circle(d / 2, mech.shaftHeight, (mech.shaftDiameter + BEARING_CLEARANCE - kerf) / 2)
-    parts.push({ name, outline, holes: [bearing], width: d, height: h })
+    const holes = [
+      circle(d / 2, mech.shaftHeight, (mech.shaftDiameter + BEARING_CLEARANCE - kerf) / 2),
+    ]
+    // the layshaft needs its own bearings, one exact centre distance below
+    if (mech.gearTrain) {
+      holes.push(
+        circle(d / 2, layshaftY(mech), (mech.shaftDiameter + BEARING_CLEARANCE - kerf) / 2),
+      )
+    }
+    parts.push({ name, outline, holes, width: d, height: h })
   }
 
   // Front/back walls: complementary corner fingers; tabs on top.
@@ -275,6 +285,25 @@ export function generateParts(spec: AutomatonSpec): Part[] {
       width: b.maxX - b.minX,
       height: b.maxY - b.minY,
     })
+  }
+
+  // Gear pair: same tooth outlines the scene meshes, keyed D-holes.
+  if (mech.gearTrain) {
+    const g = mech.gearTrain
+    for (const [name, teeth] of [
+      ['gear-drive', g.teethDrive],
+      ['gear-driven', g.teethDriven],
+    ] as const) {
+      const outline = growRadially(gearOutline(teeth, g.module), kerf / 2)
+      const b = bounds(outline)
+      parts.push({
+        name,
+        outline: translate(outline, -b.minX, -b.minY),
+        holes: [translate(dHolePath(mech.shaftDiameter - kerf, 0, 0), -b.minX, -b.minY)],
+        width: b.maxX - b.minX,
+        height: b.maxY - b.minY,
+      })
+    }
   }
 
   // Spinner discs: keyed drive wheel for the camshaft, platform for the spindle.
