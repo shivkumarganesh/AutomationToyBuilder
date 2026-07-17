@@ -196,6 +196,10 @@ function Limb({
  * through a visible wire linkage. The stand height is derived from the
  * primary drive tip's rest height — the body is placed so the linkage
  * geometry works, never eyeballed.
+ *
+ * Clicking the figure toggles X-RAY: the body shell turns translucent
+ * (like the see-through box walls) so the wires, crank arms, and pins
+ * routed through it stay opaque and the assembly can be inspected.
  */
 export function ArticulatedFigure({
   character,
@@ -207,6 +211,8 @@ export function ArticulatedFigure({
   zOffset?: number
 }) {
   const spec = useDesignerStore((s) => s.spec)
+  const xray = useDesignerStore((s) => s.xrayFigures.includes(character.id))
+  const toggleFigureXray = useDesignerStore((s) => s.toggleFigureXray)
   const primary = signals.find((s) => s.channel.id === character.channelId)
   const baseY = useMemo(() => bodyBaseY(spec, character, signals), [spec, character, signals])
   if (!primary) return null
@@ -216,26 +222,55 @@ export function ArticulatedFigure({
   const standH = Math.max(baseY - stageTop, 0)
   const limbs = character.limbs ?? []
   const hasHeadLimb = limbs.some((l) => l.kind === 'head')
-
+  // the shell (body, stand, rigid head) goes translucent in x-ray;
+  // limbs and linkage stay opaque so the internals read clearly.
+  // key forces a fresh material on toggle — flipping `transparent` on a
+  // live material needs a program rebuild that prop patching won't do
+  const shell = (shellColor: string) =>
+    xray ? (
+      <meshStandardMaterial
+        key="xray"
+        color={shellColor}
+        transparent
+        opacity={0.22}
+        depthWrite={false}
+      />
+    ) : (
+      <meshStandardMaterial key="solid" color={shellColor} />
+    )
   return (
-    <group position={[primary.channel.x, 0, zOffset]}>
+    <group
+      position={[primary.channel.x, 0, zOffset]}
+      onClick={(e) => {
+        // nearest hit only: stopPropagation keeps one click = one toggle
+        e.stopPropagation()
+        toggleFigureXray(character.id)
+      }}
+      onPointerOver={(e) => {
+        e.stopPropagation()
+        document.body.style.cursor = 'pointer'
+      }}
+      onPointerOut={() => {
+        document.body.style.cursor = 'auto'
+      }}
+    >
       {/* stand: stage to body base */}
       {standH > 0.01 && (
         <mesh position={[0, stageTop + standH / 2, 0]}>
           <boxGeometry args={[8, standH, 8]} />
-          <meshStandardMaterial color="#3a2d1c" />
+          {shell('#3a2d1c')}
         </mesh>
       )}
       {/* body */}
       <mesh position={[0, baseY + height / 2, 0]}>
         <boxGeometry args={[width, height, depth]} />
-        <meshStandardMaterial color={color} />
+        {shell(color)}
       </mesh>
       {/* static head unless a head limb replaces it */}
       {!hasHeadLimb && (
         <mesh position={[0, baseY + height + width * 0.28, 0]}>
           <boxGeometry args={[width * 0.55, width * 0.55, width * 0.55]} />
-          <meshStandardMaterial color={color} />
+          {shell(color)}
         </mesh>
       )}
       {limbs.map((limb) => {

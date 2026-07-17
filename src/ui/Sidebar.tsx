@@ -611,6 +611,8 @@ export function Sidebar() {
           <p className="hint">
             Characters bind to output channels, not to cams — swap a cam type in the
             mechanism and the figure above it changes its dance without being touched.
+            Click an articulated figure in the 3D view to x-ray its body and inspect
+            the wire linkage inside.
           </p>
         </div>
       </details>
