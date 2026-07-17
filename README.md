@@ -50,13 +50,22 @@ src/
 ## Manufacturing export
 
 - **Laser (SVG, mm)** — finger-jointed walls, a tabbed stage plate with pushrod
-  guide slots, shaft bearing holes, and cam discs with keyed D-holes. Kerf is a
+  guide slots, shaft bearing holes, cam discs with keyed D-holes, rocker
+  post/link strips at derived heights, figure silhouettes, and — for
+  articulated figures — the full kit: side-profile body with running-fit axle
+  holes at each limb pivot, the stand at the derived linkage height, and limb
+  paddles whose pivot/pin hole spacing is exactly the crank arm. Kerf is a
   user parameter: joint boundaries shift so fingers/tabs widen and slots narrow
   by the kerf, and holes are drawn undersize — tight friction fits off the bed.
 - **3D print (binary STL, mm)** — D-profile camshaft, crank, pushrods with
-  follower pads, cams, and figure blocks laid out on one build plate, with a
-  user-set radial clearance on shaft holes for FDM fit. The D-flat proportion
-  matches the laser cams, so cut and printed parts interchange.
+  follower pads, cams, rocker hardware (lever, fulcrum post, link rod), figure
+  blocks with hinge stands, and articulated figure kits: body printed with its
+  derived stand, limb plates, pivot axles, and the WIRE CRANKS that carry each
+  channel's motion to its pins (vertical run and reach derived from the same
+  rest geometry the scene renders — wings get a slotted yoke, head/tail a flat
+  L-crank with a washer end). A user-set radial clearance sizes all holes for
+  FDM fit; the D-flat proportion matches the laser cams, so cut and printed
+  parts interchange.
 
 ## Roadmap — growing the toy library
 

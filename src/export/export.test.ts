@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { bevelCarousel, flappingBird, simplestAutomaton } from '../model/templates'
+import { bevelCarousel, flappingBird, nodAndSpin, simplestAutomaton } from '../model/templates'
 import { crownPitchRadius } from '../scene/spinnerLayout'
 import { camWorldX, outputChannels } from '../model/types'
+import { channelSignals } from '../kinematics/channels'
+import { standHeight } from '../scene/figureLayout'
 import { flatPackSvg, generateParts } from './svgFlatPack'
 import { buildPrintParts, exportStl } from './stlExport'
 
@@ -21,7 +23,7 @@ describe('SVG flat-pack', () => {
   const { width: w, depth: d, height: h, materialThickness: t } = spec.frame
   const kerf = spec.export.kerf
 
-  it('produces every frame panel plus one disc per cam', () => {
+  it('produces every frame panel, one disc per cam, and figure silhouettes', () => {
     const names = parts.map((p) => p.name).sort()
     expect(names).toEqual(
       [
@@ -33,6 +35,8 @@ describe('SVG flat-pack', () => {
         'bottom',
         'cam-eccentric',
         'cam-petal',
+        'figure-figure-a',
+        'figure-figure-b',
       ].sort(),
     )
   })
@@ -169,6 +173,34 @@ describe('articulated figure print parts', () => {
     expect(names).toContain('limb-tail')
   })
 
+  it('exports the internal connections: one wire crank and one axle per limb', () => {
+    const names = parts.map((p) => p.name)
+    for (const limb of bird.limbs!) {
+      expect(names, `wire for ${limb.id}`).toContain(`wire-${limb.id}`)
+      expect(names, `axle for ${limb.id}`).toContain(`axle-${limb.id}`)
+    }
+  })
+
+  it('the body prints with its stand at the derived linkage height', () => {
+    const body = parts.find((p) => p.name === 'figure-figure-bird')!
+    body.geometry.computeBoundingBox()
+    const bb = body.geometry.boundingBox!
+    const standH = standHeight(flappingBird, bird, channelSignals(flappingBird))
+    expect(standH).toBeGreaterThan(2)
+    // stand below + body above (no rigid head: the head limb replaces it)
+    expect(bb.max.z - bb.min.z).toBeCloseTo(bird.height + standH, 3)
+  })
+
+  it('wire cranks span the derived vertical run', () => {
+    // the tail crank: vertical run + horizontal reach; its height must
+    // cover the run from the wag rod tip up to the tail pin
+    const wire = parts.find((p) => p.name === 'wire-limb-tail')!
+    wire.geometry.computeBoundingBox()
+    const bb = wire.geometry.boundingBox!
+    expect(bb.max.y - bb.min.y).toBeGreaterThan(2) // vertical run present
+    expect(bb.max.x - bb.min.x).toBeGreaterThan(10) // horizontal reach present
+  })
+
   it('wing plates are identical parts — flat and flippable', () => {
     const left = parts.find((p) => p.name === 'limb-wings-left')!
     const right = parts.find((p) => p.name === 'limb-wings-right')!
@@ -187,12 +219,71 @@ describe('articulated figure print parts', () => {
     expect(bb.max.x - bb.min.x).toBeCloseTo(expected, 3)
   })
 
-  it('the bird body ships without a rigid head — the head limb replaces it', () => {
+})
+
+describe('articulated figure laser parts', () => {
+  const parts = generateParts(flappingBird)
+  const bird = flappingBird.characters[0]
+
+  it('cuts the full bird kit: body profile, stand, and limb plates', () => {
+    const names = parts.map((p) => p.name)
+    expect(names).toContain('figure-figure-bird')
+    expect(names).toContain('figure-stand-figure-bird')
+    expect(names).toContain('limb-wings-left')
+    expect(names).toContain('limb-wings-right')
+    expect(names).toContain('limb-head')
+    expect(names).toContain('limb-tail')
+  })
+
+  it('the body side profile carries one axle hole per limb', () => {
     const body = parts.find((p) => p.name === 'figure-figure-bird')!
-    body.geometry.computeBoundingBox()
-    const bb = body.geometry.boundingBox!
-    // just the body box: no head block stacked on top
-    expect(bb.max.z - bb.min.z).toBeCloseTo(bird.height, 3)
+    expect(body.holes).toHaveLength(bird.limbs!.length)
+    expect(body.width).toBeCloseTo(bird.depth, 3)
+    expect(body.height).toBeCloseTo(bird.height, 3)
+  })
+
+  it('the stand strip is cut to the derived linkage height', () => {
+    const stand = parts.find((p) => p.name === 'figure-stand-figure-bird')!
+    const standH = standHeight(flappingBird, bird, channelSignals(flappingBird))
+    expect(stand.height).toBeCloseTo(standH, 3)
+  })
+
+  it('limb plates carry pivot and pin holes exactly crankArm apart', () => {
+    const wings = bird.limbs!.find((l) => l.kind === 'wings')!
+    const plate = parts.find((p) => p.name === 'limb-wings-left')!
+    expect(plate.holes).toHaveLength(2)
+    const centre = (hole: { x: number; y: number }[]) => {
+      const xs = hole.map((p) => p.x)
+      const ys = hole.map((p) => p.y)
+      return {
+        x: (Math.min(...xs) + Math.max(...xs)) / 2,
+        y: (Math.min(...ys) + Math.max(...ys)) / 2,
+      }
+    }
+    const a = centre(plate.holes[0])
+    const b = centre(plate.holes[1])
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(wings.crankArm, 3)
+  })
+})
+
+describe('rocker hardware export', () => {
+  it('STL includes the fulcrum post, link rod, and hinge stand', () => {
+    const names = buildPrintParts(nodAndSpin).map((p) => p.name)
+    expect(names).toContain('rocker-post-rock-nod')
+    expect(names).toContain('rocker-link-rock-nod')
+    // the nodding bird is a block figure on a tilt channel
+    expect(names).toContain('hinge-stand-figure-nodder')
+  })
+
+  it('SVG includes post and link strips at derived heights', () => {
+    const parts = generateParts(nodAndSpin)
+    const post = parts.find((p) => p.name === 'rocker-post-rock-nod')!
+    const link = parts.find((p) => p.name === 'rocker-link-rock-nod')!
+    expect(post).toBeDefined()
+    expect(link).toBeDefined()
+    const stageTop = nodAndSpin.frame.height + nodAndSpin.frame.materialThickness
+    // post + link together must reach from the floor to above the stage
+    expect(post.height + link.height).toBeCloseTo(stageTop + 6, 3)
   })
 })
 

@@ -135,3 +135,75 @@ export function pinRise(a: number, crankArm: number): number {
 export function wingTipRise(a: number, length: number): number {
   return -length * Math.sin(a)
 }
+
+/** Height of the hinge stand under tilt-riding block figures (FigureBlock). */
+export const HINGE_HEIGHT = 4
+
+/** Limb pivot axle diameter — plates and body holes are sized around it. */
+export const LIMB_AXLE_DIAMETER = 3
+/** Drive pin diameter (the scene renders r = 1.2 pins). */
+export const LIMB_PIN_DIAMETER = 2.4
+
+/** Stand height under an articulated body — derived, may be clamped ≥ 2. */
+export function standHeight(
+  spec: AutomatonSpec,
+  character: CharacterSpec,
+  signals: ChannelSignal[],
+): number {
+  const stageTop = spec.frame.height + spec.frame.materialThickness
+  return bodyBaseY(spec, character, signals) - stageTop
+}
+
+/**
+ * Drive-pin rest positions relative to the figure origin (x along the
+ * shaft, z toward the viewer), one per pin. Mirrors the scene geometry:
+ * wing pins sit crankArm inboard of the shoulders (staggered ±z), the
+ * head pin one crankArm behind the neck, the tail pin one crankArm
+ * beyond the back face on the blade.
+ */
+export function limbPinRests(
+  character: CharacterSpec,
+  limb: LimbSpec,
+): { x: number; z: number }[] {
+  const { width, depth } = character
+  switch (limb.kind) {
+    case 'wings': {
+      const px = width / 2 - limb.crankArm
+      return [
+        { x: px, z: -PIN_STAGGER },
+        { x: -px, z: PIN_STAGGER },
+      ]
+    }
+    case 'head':
+      return [{ x: 0, z: -limb.crankArm }]
+    case 'tail':
+      return [{ x: 0, z: -depth / 2 - limb.crankArm }]
+  }
+}
+
+/**
+ * Flat limb plate outline, shared by the laser and print exporters: a
+ * tapered paddle from the drive-pin end (rounded cap at −crankArm)
+ * through the pivot (origin) to the rounded tip (+length). Hole spacing
+ * — pivot at 0, pin at −crankArm — IS the linkage geometry.
+ */
+export function limbPlateOutline(
+  limb: Pick<LimbSpec, 'length' | 'width' | 'crankArm'>,
+  arcSegments = 12,
+): { x: number; y: number }[] {
+  const halfW = Math.max(limb.width / 2, 4)
+  const pts: { x: number; y: number }[] = []
+  pts.push({ x: -limb.crankArm, y: -halfW / 2 })
+  pts.push({ x: limb.length, y: -halfW })
+  for (let i = 1; i < arcSegments; i++) {
+    const a = -Math.PI / 2 + (i / arcSegments) * Math.PI
+    pts.push({ x: limb.length + halfW * Math.cos(a), y: halfW * Math.sin(a) })
+  }
+  pts.push({ x: limb.length, y: halfW })
+  pts.push({ x: -limb.crankArm, y: halfW / 2 })
+  for (let i = 1; i < arcSegments; i++) {
+    const a = Math.PI / 2 + (i / arcSegments) * Math.PI
+    pts.push({ x: -limb.crankArm + (halfW / 2) * Math.cos(a), y: (halfW / 2) * Math.sin(a) })
+  }
+  return pts
+}

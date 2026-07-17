@@ -6,9 +6,9 @@ import type { ChannelSignal } from '../../kinematics/channels'
 import { channelValue } from '../../kinematics/channels'
 import { camShaftY } from '../../model/types'
 import { useDesignerStore } from '../../model/store'
+import { HINGE_HEIGHT } from '../figureLayout'
 
 const PAD_THICKNESS = 4
-const HINGE_HEIGHT = 4
 
 /**
  * A character-zone figure riding an output channel. It knows nothing
