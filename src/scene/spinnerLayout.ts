@@ -110,3 +110,114 @@ function frac(v: number): number {
   const m = v - Math.floor(v)
   return Math.min(m, 1 - m)
 }
+
+/* ------------------------------------------------------------------ *
+ * Geneva (pin indexer) drive — intermittent stepping, every dimension
+ * derived from the pin circle radius R (= wheelRadius) and the station
+ * count N:
+ *   engagement depth p: the pin protrudes p above the star wheel plane
+ *     at the top of its arc, so the wheel plane sits at shaft + R − p
+ *   chord half-length c = sqrt(R² − (R − p)²): the pin's path across the
+ *     wheel plane
+ *   spindle offset e = c / tan(π/N): places the spindle axis so the pin's
+ *     sweep through a radial slot turns the wheel EXACTLY one station
+ *     (2·atan(c/e) = 2π/N) per crank revolution — off-axis by
+ *     construction, so torque always transfers
+ * Between engagements a detent holds the wheel parked (dwell).
+ * ------------------------------------------------------------------ */
+
+export const GENEVA_ENGAGE_DEPTH = 4
+export const GENEVA_WHEEL_THICKNESS = 4
+export const GENEVA_PIN_RADIUS = 2
+
+/** Half-length of the pin's chord across the star wheel plane. */
+export function genevaChord(spinner: SpinnerSpec): number {
+  const R = spinner.wheelRadius
+  const p = GENEVA_ENGAGE_DEPTH
+  return Math.sqrt(Math.max(R * R - (R - p) * (R - p), 0))
+}
+
+/** X distance from the spindle axis back to the driver pin plane. */
+export function genevaOffset(spinner: SpinnerSpec): number {
+  if (!spinner.stations) throw new Error(`geneva spinner ${spinner.id} is missing stations`)
+  return genevaChord(spinner) / Math.tan(Math.PI / spinner.stations)
+}
+
+/** Star wheel outer radius: covers the pin's furthest reach plus rim. */
+export function genevaWheelRadius(spinner: SpinnerSpec): number {
+  const c = genevaChord(spinner)
+  const e = genevaOffset(spinner)
+  return Math.hypot(c, e) + 5
+}
+
+/** Height of the star wheel's mid-plane above the ground. */
+export function genevaWheelY(spinner: SpinnerSpec, shaftHeight: number): number {
+  return shaftHeight + spinner.wheelRadius - GENEVA_ENGAGE_DEPTH
+}
+
+/**
+ * Spindle rotation (radians, accumulating) at crank angle theta.
+ * Dwell — engagement sweep (atan profile) — dwell, advancing exactly
+ * 2π/N per crank revolution. The engagement window is where the pin's
+ * tip rides above the wheel plane.
+ */
+export function genevaAngle(spinner: SpinnerSpec, theta: number): number {
+  const N = spinner.stations!
+  const R = spinner.wheelRadius
+  const p = GENEVA_ENGAGE_DEPTH
+  const e = genevaOffset(spinner)
+  const station = (2 * Math.PI) / N
+  const psi1 = Math.asin((R - p) / R) // window entry (pin rising through plane)
+  const psi2 = Math.PI - psi1 // window exit
+
+  const revs = Math.floor(theta / (2 * Math.PI))
+  const psi = theta - revs * 2 * Math.PI
+  let within: number
+  if (psi < psi1) within = 0
+  else if (psi > psi2) within = station
+  else within = Math.PI / N - Math.atan((R * Math.cos(psi)) / e)
+  return revs * station + within
+}
+
+/** Width of the star wheel's radial slots — pin diameter plus sliding slack. */
+export function genevaSlotWidth(): number {
+  return 2 * GENEVA_PIN_RADIUS + 1.5
+}
+
+/**
+ * Star wheel polygon: a disc with N radial slots open at the rim, slot 0
+ * centred toward the driver (−X) rotated half a station, matching the
+ * rest position genevaAngle produces. Shared by the 3D extrusion and the
+ * laser export.
+ */
+export function genevaWheelOutline(
+  spinner: SpinnerSpec,
+): { x: number; y: number }[] {
+  const N = spinner.stations!
+  const Rg = genevaWheelRadius(spinner)
+  const w = genevaSlotWidth()
+  const rIn = Math.max(genevaOffset(spinner) - 4, 5)
+  const delta = Math.asin(w / 2 / Rg)
+  const lRim = Math.sqrt(Rg * Rg - (w / 2) * (w / 2))
+  const pts: { x: number; y: number }[] = []
+  const base = Math.PI + Math.PI / N // slot 0 aims at the pin's entry side
+  for (let k = 0; k < N; k++) {
+    const g = base + (k * 2 * Math.PI) / N
+    const u = { x: Math.cos(g), y: Math.sin(g) }
+    const v = { x: -Math.sin(g), y: Math.cos(g) }
+    // slot walked CCW: outer right → inner right → inner left → outer left
+    pts.push({ x: u.x * lRim - (v.x * w) / 2, y: u.y * lRim - (v.y * w) / 2 })
+    pts.push({ x: u.x * rIn - (v.x * w) / 2, y: u.y * rIn - (v.y * w) / 2 })
+    pts.push({ x: u.x * rIn + (v.x * w) / 2, y: u.y * rIn + (v.y * w) / 2 })
+    pts.push({ x: u.x * lRim + (v.x * w) / 2, y: u.y * lRim + (v.y * w) / 2 })
+    // rim arc to the next slot
+    const gNext = g + (2 * Math.PI) / N
+    const a0 = g + delta
+    const a1 = gNext - delta
+    for (let i = 1; i <= 10; i++) {
+      const a = a0 + ((a1 - a0) * i) / 10
+      pts.push({ x: Rg * Math.cos(a), y: Rg * Math.sin(a) })
+    }
+  }
+  return pts
+}

@@ -134,21 +134,30 @@ export interface SpinnerSpec {
   /** Radius of the platform disc above the stage. */
   platformRadius: number
   /** Drive style; omitted means friction (pre-bevel saves). */
-  drive?: 'friction' | 'bevel'
+  drive?: 'friction' | 'bevel' | 'geneva'
   /** bevel drive: teeth on the crown gear (camshaft). */
   crownTeeth?: number
   /** bevel drive: teeth on the spindle pinion. */
   pinionTeeth?: number
   /** bevel drive: module shared by crown and pinion. */
   module?: number
+  /** geneva drive: stations per full spindle revolution (steps). */
+  stations?: number
 }
 
-/** Output revolutions per crank revolution — derived from teeth for bevel drives. */
+/**
+ * Output revolutions per crank revolution — derived from teeth for bevel
+ * drives; the AVERAGE rate (one station per crank turn) for geneva drives.
+ */
 export function spinnerRatio(spinner: SpinnerSpec): number {
   if (spinner.drive === 'bevel') {
     if (!spinner.crownTeeth || !spinner.pinionTeeth)
       throw new Error(`bevel spinner ${spinner.id} is missing tooth counts`)
     return spinner.crownTeeth / spinner.pinionTeeth
+  }
+  if (spinner.drive === 'geneva') {
+    if (!spinner.stations) throw new Error(`geneva spinner ${spinner.id} is missing stations`)
+    return 1 / spinner.stations
   }
   return spinner.ratio
 }

@@ -11,6 +11,10 @@ import {
   CROWN_TOOTH_LENGTH,
   crownPitchRadius,
   drivenDiscRadius,
+  GENEVA_PIN_RADIUS,
+  GENEVA_WHEEL_THICKNESS,
+  genevaWheelOutline,
+  genevaWheelY,
   PINION_THICKNESS,
 } from '../scene/spinnerLayout'
 
@@ -162,6 +166,41 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
 
   // Spinners: keyed drive wheel + spindle assembly (rod, driven disc, platform).
   for (const sp of mech.spinners) {
+    if (sp.drive === 'geneva') {
+      // driver: keyed disc with the pin printed on
+      const Rd = sp.wheelRadius - 6
+      const discShape = new Shape()
+      discShape.absarc(0, 0, Rd, 0, Math.PI * 2, false)
+      discShape.holes.push(dHole(shaftR + clearance))
+      const disc = new ExtrudeGeometry(discShape, { depth: 5, bevelEnabled: false })
+      const pin = new CylinderGeometry(GENEVA_PIN_RADIUS, GENEVA_PIN_RADIUS, 12, 16)
+      pin.rotateX(Math.PI / 2) // along the disc plane's radial direction after placement
+      place(pin, Rd, 0, 2.5)
+      pin.rotateZ(0)
+      parts.push({ name: `geneva-driver-${sp.id}`, geometry: merge([disc, pin]) })
+
+      // star wheel + spindle + platform printed as one piece
+      const pts = genevaWheelOutline(sp)
+      const wheelShape = new Shape()
+      wheelShape.moveTo(pts[0].x, pts[0].y)
+      for (let i = 1; i < pts.length; i++) wheelShape.lineTo(pts[i].x, pts[i].y)
+      wheelShape.closePath()
+      const wheel = new ExtrudeGeometry(wheelShape, {
+        depth: GENEVA_WHEEL_THICKNESS,
+        bevelEnabled: false,
+      })
+      const wheelY = genevaWheelY(sp, mech.shaftHeight)
+      const top = spec.frame.height + spec.frame.materialThickness + 8
+      const rodLen = top - wheelY + GENEVA_WHEEL_THICKNESS / 2
+      const rod = new CylinderGeometry(3, 3, rodLen, 20)
+      rod.rotateX(Math.PI / 2)
+      place(rod, 0, 0, rodLen / 2)
+      const platform = new CylinderGeometry(sp.platformRadius, sp.platformRadius, 4, 48)
+      platform.rotateX(Math.PI / 2)
+      place(platform, 0, 0, rodLen - 2)
+      parts.push({ name: `spinner-spindle-${sp.id}`, geometry: merge([wheel, rod, platform]) })
+      continue
+    }
     if (sp.drive === 'bevel') {
       // crown gear: keyed disc with axial teeth on the rim
       const Rc = crownPitchRadius(sp)

@@ -107,6 +107,10 @@ function freeShaftPosition(spec: AutomatonSpec): number {
 const FIGURE_COLORS = ['#4fb06a', '#8a6fe8', '#e0764f', '#4fa9c9', '#c94f8e']
 
 const TWO_PI = Math.PI * 2
+// Wrap the accumulating crank angle only after many whole revolutions:
+// spin figures (gears, geneva steps) keep visual continuity, floats stay
+// small, and 840 divides evenly by every ratio the UI can produce.
+const CRANK_WRAP = TWO_PI * 840
 
 export const useDesignerStore = create<DesignerState>((set) => ({
   spec: loadInitialSpec(),
@@ -117,7 +121,7 @@ export const useDesignerStore = create<DesignerState>((set) => ({
 
   setCrankAngle: (angle) => set({ crankAngle: ((angle % TWO_PI) + TWO_PI) % TWO_PI }),
   advanceCrank: (dt) =>
-    set((s) => ({ crankAngle: (s.crankAngle + dt * s.crankSpeed * TWO_PI) % TWO_PI })),
+    set((s) => ({ crankAngle: (s.crankAngle + dt * s.crankSpeed * TWO_PI) % CRANK_WRAP })),
   setCranking: (on) => set({ isCranking: on }),
   setCrankSpeed: (revPerSec) => set({ crankSpeed: revPerSec }),
   setSeeThrough: (on) => set({ seeThrough: on }),

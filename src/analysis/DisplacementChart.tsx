@@ -54,7 +54,9 @@ export function DisplacementChart() {
       id: signal.channel.id,
       label:
         signal.kind === 'spin'
-          ? `${signal.channel.id} · spin ×${signal.ratio}`
+          ? signal.channel.spinner.drive === 'geneva'
+            ? `${signal.channel.id} · geneva ${signal.channel.spinner.stations} steps`
+            : `${signal.channel.id} · spin ×${signal.ratio}`
           : `${signal.channel.id} · ${signal.channel.cam.kind}`,
       color,
       signal,
@@ -66,18 +68,36 @@ export function DisplacementChart() {
 
     const lift = withColors.filter((s) => s.signal.kind === 'lift').map(makeSeries)
     const tilt = withColors.filter((s) => s.signal.kind === 'tilt').map(makeSeries)
-    const spins = withColors.filter((s) => s.signal.kind === 'spin').map(makeSeries)
+    // geneva steps are bounded within a revolution (0 → 360/N) — chartable
+    // in the degrees panel; continuous spins stay legend-only
+    const genevaSpins = withColors
+      .filter(
+        (s) => s.signal.kind === 'spin' && s.signal.channel.spinner.drive === 'geneva',
+      )
+      .map(makeSeries)
+    const spins = withColors
+      .filter(
+        (s) => s.signal.kind === 'spin' && s.signal.channel.spinner.drive !== 'geneva',
+      )
+      .map(makeSeries)
 
     const defs: { unit: string; series: Series[]; min: number; max: number }[] = []
     if (lift.length) {
       const max = Math.max(4, ...lift.map((s) => (s.signal.kind === 'lift' ? s.signal.table.lift : 0)))
       defs.push({ unit: 'mm', series: lift, min: 0, max })
     }
-    if (tilt.length) {
+    const degSeries = [...tilt, ...genevaSpins]
+    if (degSeries.length) {
       const tables = tilt.map((s) => (s.signal.kind === 'tilt' ? s.signal.table : null))
+      const stationMax = Math.max(
+        0,
+        ...genevaSpins.map((s) =>
+          s.signal.kind === 'spin' ? 360 / (s.signal.channel.spinner.stations ?? 1) : 0,
+        ),
+      )
       const lo = Math.min(-2, ...tables.map((t) => t?.min ?? 0))
-      const hi = Math.max(2, ...tables.map((t) => t?.max ?? 0))
-      defs.push({ unit: '°', series: tilt, min: lo, max: hi })
+      const hi = Math.max(2, stationMax, ...tables.map((t) => t?.max ?? 0))
+      defs.push({ unit: '°', series: degSeries, min: lo, max: hi })
     }
 
     const plotH = H - M.top - M.bottom

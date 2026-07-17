@@ -249,12 +249,15 @@ export function Sidebar() {
                       sp.id,
                       e.target.value === 'bevel'
                         ? { drive: 'bevel', crownTeeth: 24, pinionTeeth: 8, module: 1.5 }
-                        : { drive: 'friction' },
+                        : e.target.value === 'geneva'
+                          ? { drive: 'geneva', stations: 6, wheelRadius: 16 }
+                          : { drive: 'friction' },
                     )
                   }
                 >
                   <option value="friction">Friction</option>
                   <option value="bevel">Bevel gears</option>
+                  <option value="geneva">Geneva (steps)</option>
                 </select>
                 <button
                   className="icon-btn"
@@ -264,7 +267,25 @@ export function Sidebar() {
                   ✕
                 </button>
               </div>
-              {sp.drive === 'bevel' ? (
+              {sp.drive === 'geneva' ? (
+                <>
+                  <NumberField
+                    label="Stations (steps per spindle turn)"
+                    value={sp.stations ?? 6}
+                    min={3}
+                    max={12}
+                    unit=""
+                    onChange={(v) => updateSpinner(sp.id, { stations: Math.round(v) })}
+                  />
+                  <NumberField
+                    label="Pin circle radius"
+                    value={sp.wheelRadius}
+                    min={10}
+                    max={30}
+                    onChange={(v) => updateSpinner(sp.id, { wheelRadius: v })}
+                  />
+                </>
+              ) : sp.drive === 'bevel' ? (
                 <>
                   <NumberField
                     label="Crown gear teeth"

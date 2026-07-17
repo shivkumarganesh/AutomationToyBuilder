@@ -387,10 +387,89 @@ export const bevelCarousel: AutomatonSpec = {
   },
 }
 
+/**
+ * Stepping Owl — the sixth toy, showing the Geneva drive: a pin on the
+ * camshaft indexes a six-slot star wheel, so the owl snaps its gaze
+ * around in crisp 60° steps (dwell — step — dwell) while a petal cam
+ * bounces the mouse it never quite catches.
+ */
+export const steppingOwl: AutomatonSpec = {
+  name: 'Stepping Owl',
+  frame: {
+    width: 170,
+    depth: 85,
+    height: 100,
+    materialThickness: 3,
+  },
+  mechanism: {
+    shaftDiameter: 6,
+    shaftHeight: 45,
+    crank: {
+      armLength: 25,
+      handleLength: 30,
+      handleDiameter: 10,
+    },
+    cams: [
+      {
+        id: 'cam-scurry',
+        kind: 'petal',
+        baseRadius: 14,
+        lift: 6,
+        lobes: 3,
+        position: 0.2,
+        phaseDeg: 0,
+        thickness: 6,
+      },
+    ],
+    pushrods: [
+      { id: 'rod-mouse', camId: 'cam-scurry', rodWidth: 6, padWidth: 12, length: 62 },
+    ],
+    rockers: [],
+    spinners: [
+      {
+        id: 'spin-owl',
+        position: 0.62,
+        ratio: 1,
+        wheelRadius: 16,
+        platformRadius: 24,
+        drive: 'geneva',
+        stations: 6,
+      },
+    ],
+  },
+  characters: [
+    {
+      id: 'figure-owl',
+      channelId: 'spin-owl',
+      kind: 'block',
+      width: 18,
+      height: 26,
+      depth: 15,
+      color: '#8a6248',
+      label: 'Owl',
+    },
+    {
+      id: 'figure-mouse',
+      channelId: 'rod-mouse',
+      kind: 'block',
+      width: 12,
+      height: 12,
+      depth: 10,
+      color: '#9aa3b2',
+      label: 'Mouse',
+    },
+  ],
+  export: {
+    kerf: 0.1,
+    fdmClearance: 0.2,
+  },
+}
+
 export const templates: Record<string, AutomatonSpec> = {
   simplest: simplestAutomaton,
   woodpecker: snailWoodpecker,
   nodspin: nodAndSpin,
   hummingbird: gearedHummingbird,
   carousel: bevelCarousel,
+  owl: steppingOwl,
 }

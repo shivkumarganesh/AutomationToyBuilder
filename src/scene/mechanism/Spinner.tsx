@@ -14,6 +14,12 @@ import {
   crownPlaneOffset,
   DISC_THICKNESS,
   drivenDiscRadius,
+  GENEVA_PIN_RADIUS,
+  GENEVA_WHEEL_THICKNESS,
+  genevaOffset,
+  genevaWheelOutline,
+  genevaWheelRadius,
+  genevaWheelY,
   PINION_THICKNESS,
   SPINDLE_RADIUS,
 } from '../spinnerLayout'
@@ -47,6 +53,23 @@ export function Spinner({ signal }: { signal: ChannelSignal & { kind: 'spin' } }
   })
 
   const isBevel = spinner.drive === 'bevel'
+  const isGeneva = spinner.drive === 'geneva'
+
+  const genevaGeo = useMemo(() => {
+    if (!isGeneva) return null
+    const pts = genevaWheelOutline(spinner)
+    const shape = new Shape()
+    shape.moveTo(pts[0].x, pts[0].y)
+    for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y)
+    shape.closePath()
+    const geo = new ExtrudeGeometry(shape, {
+      depth: GENEVA_WHEEL_THICKNESS,
+      bevelEnabled: false,
+    })
+    geo.translate(0, 0, -GENEVA_WHEEL_THICKNESS / 2)
+    geo.rotateX(-Math.PI / 2) // lie horizontal, spin about Y
+    return geo
+  }, [isGeneva, spinner])
 
   const pinionGeo = useMemo(() => {
     if (!isBevel) return null
@@ -60,6 +83,57 @@ export function Spinner({ signal }: { signal: ChannelSignal & { kind: 'spin' } }
     geo.rotateX(-Math.PI / 2) // lie horizontal, spin about Y
     return geo
   }, [isBevel, spinner.pinionTeeth, spinner.module])
+
+  if (isGeneva) {
+    const R = spinner.wheelRadius
+    const e = genevaOffset(spinner)
+    const wheelY = genevaWheelY(spinner, shaftHeight)
+    const Rg = genevaWheelRadius(spinner)
+
+    return (
+      <group position={[channel.x, 0, 0]}>
+        {/* driver on the camshaft: disc + one radial pin, offset e from the spindle */}
+        <group ref={driveRef} position={[-e, shaftHeight, 0]}>
+          <mesh rotation-z={Math.PI / 2}>
+            <cylinderGeometry args={[R - 6, R - 6, 5, 40]} />
+            <meshStandardMaterial color="#b0764f" />
+          </mesh>
+          {/* pin reaches radius R; genevaAngle's window matches sin(theta) */}
+          <group rotation-x={-Math.PI / 2}>
+            <mesh position={[0, R - 6, 0]}>
+              <cylinderGeometry args={[GENEVA_PIN_RADIUS, GENEVA_PIN_RADIUS, 12, 16]} />
+              <meshStandardMaterial color="#e0a54f" />
+            </mesh>
+          </group>
+        </group>
+        {/* horizontal star wheel at the spindle base, stepped by the pin */}
+        <group ref={spindle}>
+          {genevaGeo && (
+            <mesh geometry={genevaGeo} position={[0, wheelY, 0]}>
+              <meshStandardMaterial color="#8a6fe8" />
+            </mesh>
+          )}
+          <mesh position={[0, (wheelY + platformY) / 2, 0]}>
+            <cylinderGeometry
+              args={[SPINDLE_RADIUS, SPINDLE_RADIUS, platformY - wheelY, 16]}
+            />
+            <meshStandardMaterial color="#8d6e63" />
+          </mesh>
+          <mesh position={[0, platformY, 0]}>
+            <cylinderGeometry
+              args={[spinner.platformRadius, spinner.platformRadius, DISC_THICKNESS, 40]}
+            />
+            <meshStandardMaterial color="#c9a06a" />
+          </mesh>
+        </group>
+        {/* detent block holding the wheel parked between steps */}
+        <mesh position={[Rg + 2, wheelY, 0]}>
+          <boxGeometry args={[4, 6, 8]} />
+          <meshStandardMaterial color="#3a2d1c" />
+        </mesh>
+      </group>
+    )
+  }
 
   if (isBevel) {
     const Rc = crownPitchRadius(spinner)
