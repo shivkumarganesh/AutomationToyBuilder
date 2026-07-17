@@ -10,6 +10,7 @@ import {
   LIMB_THICKNESS,
   limbPivotFrac,
   PIN_STAGGER,
+  remoteWireZ,
   sourceTipY,
   tailRotation,
   WIRE_RADIUS,
@@ -58,6 +59,7 @@ function Limb({
   const right = useRef<Group>(null)
   const single = useRef<Group>(null)
   const vert = useRef<Mesh>(null)
+  const setback = useRef<Mesh>(null)
   const armL = useRef<Mesh>(null)
   const armR = useRef<Mesh>(null)
   const { width, height, depth, color } = character
@@ -65,6 +67,12 @@ function Limb({
   const chord = limb.width
   const pivotY = baseY + limbPivotFrac(limb.kind) * height
   const hasWire = signal.kind !== 'spin'
+  // a remote wire (another channel's rod) must clear the wing sweep: it
+  // sets back to the pin's depth plane at rod-tip level, then rises and
+  // runs to the pin entirely behind the flapping plane
+  const remote =
+    limb.kind !== 'wings' && limb.channelId !== character.channelId
+  const riserZ = remote ? remoteWireZ(character, limb) : 0
 
   useFrame(() => {
     const theta = useDesignerStore.getState().crankAngle
@@ -77,9 +85,13 @@ function Limb({
     // vertical run above the source tip up to pin height (constant length
     // — pin height is exactly pivotY + d), then a horizontal arm to the pin
     const pinY = pivotY + crankArm * Math.sin(a)
+    const vz = remote ? riserZ : sz
     if (hasWire && tipY !== null && vert.current) {
-      vert.current.position.set(sx, (tipY + pinY) / 2, sz)
+      vert.current.position.set(sx, (tipY + pinY) / 2, vz)
       vert.current.scale.set(1, Math.max(pinY - tipY, 0.5), 1)
+    }
+    if (hasWire && tipY !== null && remote && setback.current) {
+      spanWire(setback.current, sx, tipY, sz, sx, tipY, riserZ)
     }
 
     if (limb.kind === 'wings') {
@@ -99,7 +111,7 @@ function Limb({
         // outside the back face — both land in open air, never inside the body
         const pinZ =
           limb.kind === 'head' ? -crankArm * Math.cos(a) : -depth / 2 - crankArm * Math.cos(a)
-        spanWire(armL.current, sx, pinY, sz, 0, pinY, pinZ)
+        spanWire(armL.current, sx, pinY, vz, 0, pinY, pinZ)
       }
     }
   })
@@ -164,6 +176,7 @@ function Limb({
             <meshStandardMaterial color={ARM_COLOR} />
           </mesh>
         </group>
+        {hasWire && remote && wire(setback)}
         {hasWire && wire(vert)}
         {hasWire && wire(armL)}
       </>
@@ -184,6 +197,7 @@ function Limb({
           <meshStandardMaterial color={ARM_COLOR} />
         </mesh>
       </group>
+      {hasWire && remote && wire(setback)}
       {hasWire && wire(vert)}
       {hasWire && wire(armL)}
     </>

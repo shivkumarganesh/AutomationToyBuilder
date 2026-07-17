@@ -512,7 +512,10 @@ export const flappingBird: AutomatonSpec = {
     ],
     pushrods: [
       { id: 'rod-flap', camId: 'cam-flap', rodWidth: 6, padWidth: 24, length: 62 },
-      { id: 'rod-wag', camId: 'cam-wag', rodWidth: 6, padWidth: 12, length: 58 },
+      // short on purpose: the wag rod's top must stay BELOW the wings'
+      // lowest sweep — the tail wire sets back behind the flapping plane
+      // from here (clearance pinned by the wing-sweep test)
+      { id: 'rod-wag', camId: 'cam-wag', rodWidth: 6, padWidth: 12, length: 40 },
     ],
     rockers: [],
     spinners: [],
