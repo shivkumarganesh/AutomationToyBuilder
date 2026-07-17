@@ -111,3 +111,47 @@ describe('characters', () => {
     }
   })
 })
+
+describe('articulated characters', () => {
+  it('converting to articulated seeds a wings limb on the figure channel', () => {
+    const figure = state().spec.characters[0]
+    state().setCharacterKind(figure.id, 'articulated')
+    const converted = state().spec.characters.find((c) => c.id === figure.id)!
+    expect(converted.kind).toBe('articulated')
+    expect(converted.limbs).toHaveLength(1)
+    expect(converted.limbs![0].kind).toBe('wings')
+    expect(converted.limbs![0].channelId).toBe(figure.channelId)
+    // converting back strips the limbs entirely
+    state().setCharacterKind(figure.id, 'block')
+    const back = state().spec.characters.find((c) => c.id === figure.id)!
+    expect(back.kind).toBe('block')
+    expect('limbs' in back).toBe(false)
+  })
+
+  it('addLimb picks the next unused kind and respects the cap', () => {
+    const figure = state().spec.characters[0]
+    state().setCharacterKind(figure.id, 'articulated')
+    state().addLimb(figure.id)
+    state().addLimb(figure.id)
+    state().addLimb(figure.id) // beyond MAX_LIMBS — ignored
+    const limbs = state().spec.characters.find((c) => c.id === figure.id)!.limbs!
+    expect(limbs).toHaveLength(3)
+    expect(limbs.map((l) => l.kind).sort()).toEqual(['head', 'tail', 'wings'])
+    expect(new Set(limbs.map((l) => l.id)).size).toBe(3)
+  })
+
+  it('removing a channel strips limbs driven by it from surviving figures', () => {
+    const figure = state().spec.characters[0] // rides rod-a (cam-eccentric)
+    state().setCharacterKind(figure.id, 'articulated')
+    state().addLimb(figure.id) // head, bound to rod-a by default
+    state().updateLimb(
+      figure.id,
+      state().spec.characters.find((c) => c.id === figure.id)!.limbs![1].id,
+      { channelId: 'rod-b' },
+    )
+    state().removeCam('cam-petal') // removes rod-b
+    const survivor = state().spec.characters.find((c) => c.id === figure.id)!
+    expect(survivor.limbs).toHaveLength(1)
+    expect(survivor.limbs![0].channelId).toBe('rod-a')
+  })
+})

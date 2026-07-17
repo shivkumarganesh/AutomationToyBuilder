@@ -66,6 +66,10 @@ introduces a new mechanism, a profile function in `src/kinematics/`):
 - ~~snail-cam woodpecker~~, ~~rotation/tilt output channels~~, ~~spur gear
   trains with a layshaft~~ — shipped as the Woodpecker, Nod & Spin Carousel,
   and Geared Hummingbird templates
-- 90° bevel transfer, Geneva drives for stepping motion
-- articulated multi-joint characters
+- ~~90° bevel transfer~~, ~~Geneva drives for stepping motion~~ — shipped as
+  the Bevel Gear Carousel and Stepping Owl templates
+- ~~articulated multi-joint characters~~ — shipped as the Flapping Bird:
+  figures with pivot-jointed wings/head/tail limbs, each driven by an output
+  channel through a pin-and-wire linkage (`angle = asin(d / crankArm)`), with
+  printable limb plates whose hole spacing IS the linkage geometry
 - linkages for multi-directional trajectories

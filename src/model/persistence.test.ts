@@ -5,12 +5,12 @@ import {
   parseSpec,
   serializeSpec,
 } from './persistence'
-import { simplestAutomaton, snailWoodpecker } from './templates'
+import { flappingBird, simplestAutomaton, snailWoodpecker, templates } from './templates'
 import { channelSignals } from '../kinematics/channels'
 
 describe('parseSpec', () => {
   it('round-trips every template through JSON unchanged', () => {
-    for (const spec of [simplestAutomaton, snailWoodpecker]) {
+    for (const spec of Object.values(templates)) {
       expect(parseSpec(serializeSpec(spec))).toEqual(spec)
     }
   })
@@ -41,6 +41,35 @@ describe('parseSpec', () => {
     }
     nan.frame.height = 'tall'
     expect(() => parseSpec(JSON.stringify(nan))).toThrow('finite number')
+  })
+
+  it('validates articulated limbs: dangling channels and bad kinds are rejected', () => {
+    const dangling = structuredClone(flappingBird)
+    dangling.characters[0].limbs![0].channelId = 'rod-ghost'
+    expect(() => parseSpec(JSON.stringify(dangling))).toThrow('unknown channel')
+
+    const badKind = structuredClone(flappingBird) as unknown as {
+      characters: { limbs: { kind: unknown }[] }[]
+    }
+    badKind.characters[0].limbs[0].kind = 'tentacle'
+    expect(() => parseSpec(JSON.stringify(badKind))).toThrow('kind unknown')
+
+    const noLimbs = structuredClone(flappingBird)
+    noLimbs.characters[0].limbs = []
+    expect(() => parseSpec(JSON.stringify(noLimbs))).toThrow('1–3 limbs')
+
+    const dupIds = structuredClone(flappingBird)
+    dupIds.characters[0].limbs![1].id = dupIds.characters[0].limbs![0].id
+    expect(() => parseSpec(JSON.stringify(dupIds))).toThrow('unique')
+
+    const tinyArm = structuredClone(flappingBird)
+    tinyArm.characters[0].limbs![0].crankArm = 0.5
+    expect(() => parseSpec(JSON.stringify(tinyArm))).toThrow('out of range')
+  })
+
+  it('block characters never carry a limbs field after parsing', () => {
+    const parsed = parseSpec(serializeSpec(simplestAutomaton))
+    for (const c of parsed.characters) expect('limbs' in c).toBe(false)
   })
 
   it('falls back to a safe color for invalid character colors', () => {
