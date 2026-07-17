@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { AutomatonSpec } from '../model/types'
 import { outputChannels } from '../model/types'
 import { camOutline } from '../kinematics/camProfile'
+import { drivenDiscRadius } from '../scene/spinnerLayout'
 
 /**
  * 3D-printable parts (binary STL, mm, Z-up, laid flat on the build plate):
@@ -141,7 +142,7 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
     const rod = new CylinderGeometry(3, 3, spindleLength, 20)
     rod.rotateX(Math.PI / 2) // axis along Z: prints standing up
     place(rod, 0, 0, spindleLength / 2)
-    const driven = new CylinderGeometry(sp.wheelRadius * 0.9, sp.wheelRadius * 0.9, 4, 32)
+    const driven = new CylinderGeometry(drivenDiscRadius(sp), drivenDiscRadius(sp), 4, 32)
     driven.rotateX(Math.PI / 2)
     place(driven, 0, 0, 2)
     const platform = new CylinderGeometry(sp.platformRadius, sp.platformRadius, 4, 48)

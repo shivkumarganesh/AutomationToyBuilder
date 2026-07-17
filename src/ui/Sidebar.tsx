@@ -235,8 +235,8 @@ export function Sidebar() {
               <NumberField
                 label="Spin ratio (revs per crank turn)"
                 value={sp.ratio}
-                min={-3}
-                max={3}
+                min={0.25}
+                max={2}
                 step={0.25}
                 unit="×"
                 onChange={(v) => updateSpinner(sp.id, { ratio: v })}
