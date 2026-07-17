@@ -1,5 +1,5 @@
 import type { CamSpec } from '../model/types'
-import { gearRatio, layshaftY } from '../model/types'
+import { gearRatio, layshaftY, spinnerRatio } from '../model/types'
 import { channelCount, MAX_CHANNELS, useDesignerStore } from '../model/store'
 import { NumberField } from './NumberField'
 import { ExportPanel } from './ExportPanel'
@@ -239,7 +239,23 @@ export function Sidebar() {
           {spec.mechanism.spinners.map((sp) => (
             <div key={sp.id}>
               <div className="subhead">
-                {sp.id} · spinner
+                {sp.id} · spins ×{spinnerRatio(sp).toFixed(2)}
+                <select
+                  style={{ marginLeft: 6 }}
+                  title="Drive style"
+                  value={sp.drive === 'bevel' ? 'bevel' : 'friction'}
+                  onChange={(e) =>
+                    updateSpinner(
+                      sp.id,
+                      e.target.value === 'bevel'
+                        ? { drive: 'bevel', crownTeeth: 24, pinionTeeth: 8, module: 1.5 }
+                        : { drive: 'friction' },
+                    )
+                  }
+                >
+                  <option value="friction">Friction</option>
+                  <option value="bevel">Bevel gears</option>
+                </select>
                 <button
                   className="icon-btn"
                   title="Remove this spinner and figures riding it"
@@ -248,22 +264,53 @@ export function Sidebar() {
                   ✕
                 </button>
               </div>
-              <NumberField
-                label="Spin ratio (revs per crank turn)"
-                value={sp.ratio}
-                min={0.25}
-                max={2}
-                step={0.25}
-                unit="×"
-                onChange={(v) => updateSpinner(sp.id, { ratio: v })}
-              />
-              <NumberField
-                label="Drive wheel radius"
-                value={sp.wheelRadius}
-                min={6}
-                max={30}
-                onChange={(v) => updateSpinner(sp.id, { wheelRadius: v })}
-              />
+              {sp.drive === 'bevel' ? (
+                <>
+                  <NumberField
+                    label="Crown gear teeth"
+                    value={sp.crownTeeth ?? 24}
+                    min={12}
+                    max={36}
+                    unit=""
+                    onChange={(v) => updateSpinner(sp.id, { crownTeeth: Math.round(v) })}
+                  />
+                  <NumberField
+                    label="Pinion teeth"
+                    value={sp.pinionTeeth ?? 8}
+                    min={6}
+                    max={16}
+                    unit=""
+                    onChange={(v) => updateSpinner(sp.id, { pinionTeeth: Math.round(v) })}
+                  />
+                  <NumberField
+                    label="Module (tooth size)"
+                    value={sp.module ?? 1.5}
+                    min={1}
+                    max={2.5}
+                    step={0.25}
+                    onChange={(v) => updateSpinner(sp.id, { module: v })}
+                  />
+                </>
+              ) : (
+                <>
+                  <NumberField
+                    label="Spin ratio (revs per crank turn)"
+                    value={sp.ratio}
+                    min={0.25}
+                    max={2}
+                    step={0.25}
+                    unit="×"
+                    onChange={(v) => updateSpinner(sp.id, { ratio: v })}
+                  />
+                  <NumberField
+                    label="Drive wheel radius"
+                    value={sp.wheelRadius}
+                    min={6}
+                    max={30}
+                    onChange={(v) => updateSpinner(sp.id, { wheelRadius: v })}
+                  />
+                </>
+              )}
               <NumberField
                 label="Platform radius"
                 value={sp.platformRadius}

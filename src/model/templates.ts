@@ -310,9 +310,87 @@ export const gearedHummingbird: AutomatonSpec = {
   },
 }
 
+/**
+ * Bevel Gear Carousel — the fifth toy: a crown gear on the camshaft
+ * meshes a small pinion at the base of the vertical spindle (90° positive
+ * drive, ratio = crown/pinion teeth = 3), spinning the carousel three
+ * turns per crank revolution while a rocker nods the ticket bear beside it.
+ */
+export const bevelCarousel: AutomatonSpec = {
+  name: 'Bevel Gear Carousel',
+  frame: {
+    width: 180,
+    depth: 90,
+    height: 100,
+    materialThickness: 3,
+  },
+  mechanism: {
+    shaftDiameter: 6,
+    shaftHeight: 45,
+    crank: {
+      armLength: 25,
+      handleLength: 30,
+      handleDiameter: 10,
+    },
+    cams: [
+      {
+        id: 'cam-nod',
+        kind: 'eccentric',
+        radius: 16,
+        eccentricity: 5,
+        position: 0.22,
+        phaseDeg: 0,
+        thickness: 6,
+      },
+    ],
+    pushrods: [],
+    rockers: [{ id: 'rock-bear', camId: 'cam-nod', leverLength: 30, padWidth: 14 }],
+    spinners: [
+      {
+        id: 'spin-carousel',
+        position: 0.66,
+        ratio: 1,
+        wheelRadius: 14,
+        platformRadius: 30,
+        drive: 'bevel',
+        crownTeeth: 24,
+        pinionTeeth: 8,
+        module: 1.5,
+      },
+    ],
+  },
+  characters: [
+    {
+      id: 'figure-bear',
+      channelId: 'rock-bear',
+      kind: 'block',
+      width: 18,
+      height: 24,
+      depth: 14,
+      color: '#8a6248',
+      label: 'Ticket Bear',
+    },
+    {
+      id: 'figure-horse',
+      channelId: 'spin-carousel',
+      kind: 'block',
+      width: 14,
+      height: 20,
+      depth: 12,
+      color: '#4f8fe0',
+      label: 'Carousel Horse',
+    },
+  ],
+  export: {
+    kerf: 0.1,
+    fdmClearance: 0.2,
+  },
+}
+
 export const templates: Record<string, AutomatonSpec> = {
   simplest: simplestAutomaton,
   woodpecker: snailWoodpecker,
   nodspin: nodAndSpin,
   hummingbird: gearedHummingbird,
+  carousel: bevelCarousel,
 }

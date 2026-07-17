@@ -111,20 +111,46 @@ export interface RockerSpec {
 }
 
 /**
- * A friction/crown wheel on the camshaft driving a vertical spindle up
- * through the stage. One spinner = one SPIN output channel: continuous
- * rotation at `ratio` output revolutions per crank revolution.
+ * A drive on the camshaft turning a vertical spindle up through the
+ * stage. One spinner = one SPIN output channel: continuous rotation.
+ *
+ * Two drive styles:
+ *  - friction (default): a wheel rubs the spindle's driven disc at a
+ *    contact radius derived from `ratio` (offset = wheelRadius / ratio)
+ *  - bevel: a crown gear on the camshaft meshes a horizontal pinion at
+ *    the spindle base — positive tooth drive, 90° transfer. The ratio is
+ *    DERIVED as crownTeeth / pinionTeeth (never free); the spindle axis
+ *    sits one pinion pitch radius from the crown plane and the mesh
+ *    height one crown pitch radius above the camshaft.
  */
 export interface SpinnerSpec {
   id: string
-  /** Position along the shaft, fraction of the interior width. */
+  /** Position of the spindle axis along the shaft, fraction of interior width. */
   position: number
-  /** Output revolutions per crank revolution. */
+  /** friction drive only: output revolutions per crank revolution. */
   ratio: number
-  /** Radius of the drive wheel on the camshaft. */
+  /** friction drive only: radius of the drive wheel on the camshaft. */
   wheelRadius: number
   /** Radius of the platform disc above the stage. */
   platformRadius: number
+  /** Drive style; omitted means friction (pre-bevel saves). */
+  drive?: 'friction' | 'bevel'
+  /** bevel drive: teeth on the crown gear (camshaft). */
+  crownTeeth?: number
+  /** bevel drive: teeth on the spindle pinion. */
+  pinionTeeth?: number
+  /** bevel drive: module shared by crown and pinion. */
+  module?: number
+}
+
+/** Output revolutions per crank revolution — derived from teeth for bevel drives. */
+export function spinnerRatio(spinner: SpinnerSpec): number {
+  if (spinner.drive === 'bevel') {
+    if (!spinner.crownTeeth || !spinner.pinionTeeth)
+      throw new Error(`bevel spinner ${spinner.id} is missing tooth counts`)
+    return spinner.crownTeeth / spinner.pinionTeeth
+  }
+  return spinner.ratio
 }
 
 export interface CrankSpec {

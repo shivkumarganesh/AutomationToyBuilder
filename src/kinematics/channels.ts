@@ -1,5 +1,5 @@
 import type { AutomatonSpec, OutputChannel } from '../model/types'
-import { camAngularRate, outputChannels } from '../model/types'
+import { camAngularRate, outputChannels, spinnerRatio } from '../model/types'
 import { displacementTable, sampleDisplacement, type DisplacementTable } from './follower'
 
 /**
@@ -57,7 +57,7 @@ export function channelSignals(spec: AutomatonSpec): ChannelSignal[] {
           ),
         }
       case 'spin':
-        return { kind: 'spin', channel, ratio: channel.spinner.ratio }
+        return { kind: 'spin', channel, ratio: spinnerRatio(channel.spinner) }
     }
   })
 }
