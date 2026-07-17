@@ -1,5 +1,5 @@
 import type { CamSpec } from '../model/types'
-import { useDesignerStore } from '../model/store'
+import { MAX_CAMS, MIN_CAMS, useDesignerStore } from '../model/store'
 import { NumberField } from './NumberField'
 import { ExportPanel } from './ExportPanel'
 
@@ -21,8 +21,9 @@ function convertCam(cam: CamSpec, kind: CamSpec['kind']): CamSpec {
   }
 }
 
-function CamControls({ cam }: { cam: CamSpec }) {
+function CamControls({ cam, removable }: { cam: CamSpec; removable: boolean }) {
   const updateCam = useDesignerStore((s) => s.updateCam)
+  const removeCam = useDesignerStore((s) => s.removeCam)
   const replaceCam = (next: CamSpec) => updateCam(cam.id, next)
   return (
     <>
@@ -37,6 +38,15 @@ function CamControls({ cam }: { cam: CamSpec }) {
           <option value="petal">Petal</option>
           <option value="snail">Snail</option>
         </select>
+        {removable && (
+          <button
+            className="icon-btn"
+            title="Remove this cam, its pushrod, and figures riding it"
+            onClick={() => removeCam(cam.id)}
+          >
+            ✕
+          </button>
+        )}
       </div>
       {cam.kind === 'eccentric' && (
         <>
@@ -132,6 +142,9 @@ export function Sidebar() {
   const updateMechanism = useDesignerStore((s) => s.updateMechanism)
   const updatePushrod = useDesignerStore((s) => s.updatePushrod)
   const updateCharacter = useDesignerStore((s) => s.updateCharacter)
+  const addCam = useDesignerStore((s) => s.addCam)
+  const addCharacter = useDesignerStore((s) => s.addCharacter)
+  const removeCharacter = useDesignerStore((s) => s.removeCharacter)
 
   return (
     <aside className="sidebar">
@@ -198,8 +211,19 @@ export function Sidebar() {
             }
           />
           {spec.mechanism.cams.map((cam) => (
-            <CamControls key={cam.id} cam={cam} />
+            <CamControls
+              key={cam.id}
+              cam={cam}
+              removable={spec.mechanism.cams.length > MIN_CAMS}
+            />
           ))}
+          <button
+            onClick={addCam}
+            disabled={spec.mechanism.cams.length >= MAX_CAMS}
+            style={{ width: '100%', marginTop: 4 }}
+          >
+            + Add cam {spec.mechanism.cams.length >= MAX_CAMS ? '(max 4)' : ''}
+          </button>
           <div className="subhead">Pushrods (stage interface)</div>
           {spec.mechanism.pushrods.map((rod) => (
             <div key={rod.id}>
@@ -228,13 +252,31 @@ export function Sidebar() {
           {spec.characters.map((ch) => (
             <div key={ch.id}>
               <div className="subhead">
-                {ch.label} · rides {ch.channelId}
+                {ch.label} · rides
+                <select
+                  style={{ marginLeft: 6 }}
+                  value={ch.channelId}
+                  onChange={(e) => updateCharacter(ch.id, { channelId: e.target.value })}
+                >
+                  {spec.mechanism.pushrods.map((rod) => (
+                    <option key={rod.id} value={rod.id}>
+                      {rod.id}
+                    </option>
+                  ))}
+                </select>
                 <input
                   type="color"
                   value={ch.color}
                   style={{ marginLeft: 8, verticalAlign: 'middle' }}
                   onChange={(e) => updateCharacter(ch.id, { color: e.target.value })}
                 />
+                <button
+                  className="icon-btn"
+                  title="Remove this figure"
+                  onClick={() => removeCharacter(ch.id)}
+                >
+                  ✕
+                </button>
               </div>
               <NumberField
                 label="Height"
@@ -252,6 +294,9 @@ export function Sidebar() {
               />
             </div>
           ))}
+          <button onClick={addCharacter} style={{ width: '100%', marginTop: 4 }}>
+            + Add figure
+          </button>
           <p className="hint">
             Characters bind to output channels, not to cams — swap a cam type in the
             mechanism and the figure above it changes its dance without being touched.

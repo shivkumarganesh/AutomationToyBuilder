@@ -223,6 +223,20 @@ button.primary:hover {
   white-space: nowrap;
 }
 
+.icon-btn {
+  margin-left: auto;
+  padding: 1px 7px;
+  font-size: 11px;
+  line-height: 1.4;
+  border-radius: 4px;
+  float: right;
+}
+
+.subhead {
+  display: flex;
+  align-items: center;
+}
+
 .export-buttons {
   display: flex;
   flex-direction: column;

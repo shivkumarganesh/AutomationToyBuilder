@@ -40,12 +40,22 @@ export function AutomatonScene() {
         ))}
       </group>
 
-      {/* character zone — above the stage */}
+      {/* character zone — above the stage; figures sharing a channel fan out in Z */}
       <group name="characters">
         {spec.characters.map((character) => {
           const signal = channels.find((c) => c.channel.id === character.channelId)
           if (!signal) return null
-          return <FigureBlock key={character.id} character={character} signal={signal} />
+          const siblings = spec.characters.filter((c) => c.channelId === character.channelId)
+          const index = siblings.indexOf(character)
+          const zOffset = (index - (siblings.length - 1) / 2) * (character.depth + 4)
+          return (
+            <FigureBlock
+              key={character.id}
+              character={character}
+              signal={signal}
+              zOffset={zOffset}
+            />
+          )
         })}
       </group>
 
