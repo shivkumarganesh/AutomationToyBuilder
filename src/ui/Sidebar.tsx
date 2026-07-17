@@ -1,6 +1,7 @@
 import type { CamSpec, CharacterSpec, LimbKind } from '../model/types'
 import { gearRatio, layshaftY, spinnerRatio } from '../model/types'
 import { channelCount, MAX_CHANNELS, MAX_LIMBS, useDesignerStore } from '../model/store'
+import { grashofOk } from '../kinematics/linkage'
 import { NumberField } from './NumberField'
 import { ExportPanel } from './ExportPanel'
 import { SavePanel } from './SavePanel'
@@ -152,6 +153,7 @@ function useChannelIds(): string[] {
     ...mech.pushrods.map((r) => r.id),
     ...mech.rockers.map((r) => r.id),
     ...mech.spinners.map((sp) => sp.id),
+    ...(mech.linkages ?? []).map((l) => l.id),
   ]
 }
 
@@ -300,6 +302,9 @@ export function Sidebar() {
   const updateRocker = useDesignerStore((s) => s.updateRocker)
   const updateSpinner = useDesignerStore((s) => s.updateSpinner)
   const addCharacter = useDesignerStore((s) => s.addCharacter)
+  const addLinkage = useDesignerStore((s) => s.addLinkage)
+  const updateLinkage = useDesignerStore((s) => s.updateLinkage)
+  const removeLinkage = useDesignerStore((s) => s.removeLinkage)
   const addGearTrain = useDesignerStore((s) => s.addGearTrain)
   const updateGearTrain = useDesignerStore((s) => s.updateGearTrain)
   const removeGearTrain = useDesignerStore((s) => s.removeGearTrain)
@@ -547,6 +552,85 @@ export function Sidebar() {
               + Add gear train (layshaft)
             </button>
           )}
+          {(spec.mechanism.linkages ?? []).map((l) => (
+            <div key={l.id}>
+              <div className="subhead">
+                {l.id} · four-bar
+                <button
+                  className="icon-btn"
+                  title="Remove this linkage and figures riding it"
+                  onClick={() => removeLinkage(l.id)}
+                >
+                  ✕
+                </button>
+              </div>
+              {!grashofOk(l) && (
+                <p className="hint" style={{ color: '#e0764f' }}>
+                  Not a crank-rocker: the crank must stay the shortest link and
+                  crank + longest ≤ the other two combined. Adjust the lengths.
+                </p>
+              )}
+              <NumberField
+                label="Crank radius"
+                value={l.crankRadius}
+                min={5}
+                max={20}
+                onChange={(v) => updateLinkage(l.id, { crankRadius: v })}
+              />
+              <NumberField
+                label="Coupler length"
+                value={l.couplerLen}
+                min={15}
+                max={70}
+                onChange={(v) => updateLinkage(l.id, { couplerLen: v })}
+              />
+              <NumberField
+                label="Rocker length"
+                value={l.rockerLen}
+                min={15}
+                max={70}
+                onChange={(v) => updateLinkage(l.id, { rockerLen: v })}
+              />
+              <NumberField
+                label="Pivot offset (ground link)"
+                value={l.groundLen}
+                min={15}
+                max={70}
+                onChange={(v) => updateLinkage(l.id, { groundLen: v })}
+              />
+              <NumberField
+                label="Coupler point extension"
+                value={l.couplerExt}
+                min={0}
+                max={40}
+                onChange={(v) => updateLinkage(l.id, { couplerExt: v })}
+              />
+              <NumberField
+                label="Wand length"
+                value={l.wandLen}
+                min={30}
+                max={120}
+                onChange={(v) => updateLinkage(l.id, { wandLen: v })}
+              />
+              <NumberField
+                label="Position on shaft"
+                value={Math.round(l.position * 100)}
+                min={10}
+                max={90}
+                unit="%"
+                onChange={(v) => updateLinkage(l.id, { position: v / 100 })}
+              />
+              <NumberField
+                label="Phase"
+                value={l.phaseDeg}
+                min={0}
+                max={360}
+                step={5}
+                unit="°"
+                onChange={(v) => updateLinkage(l.id, { phaseDeg: v })}
+              />
+            </div>
+          ))}
           <div className="row" style={{ marginTop: 4 }}>
             <button onClick={addCam} disabled={full} style={{ flex: 1 }}>
               + Cam
@@ -556,6 +640,9 @@ export function Sidebar() {
             </button>
             <button onClick={addSpinner} disabled={full} style={{ flex: 1 }}>
               + Spinner
+            </button>
+            <button onClick={addLinkage} disabled={full} style={{ flex: 1 }}>
+              + Linkage
             </button>
           </div>
           {full && <p className="hint">Channel limit reached (4).</p>}

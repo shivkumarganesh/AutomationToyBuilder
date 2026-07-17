@@ -4,6 +4,7 @@ import type { Group } from 'three'
 import type { CharacterSpec } from '../../model/types'
 import type { ChannelSignal } from '../../kinematics/channels'
 import { channelValue } from '../../kinematics/channels'
+import { samplePath } from '../../kinematics/linkage'
 import { camShaftY } from '../../model/types'
 import { useDesignerStore } from '../../model/store'
 import { HINGE_HEIGHT } from '../figureLayout'
@@ -19,6 +20,8 @@ const PAD_THICKNESS = 4
  *  - tilt: nods on a hinge stand at its front edge, pushed by the rocker's
  *    link rod from below
  *  - spin: rides the carousel platform, orbiting the spindle
+ *  - path: rides the linkage wand — swoops along the coupler curve and
+ *    pitches with the coupler
  */
 export function FigureBlock({
   character,
@@ -53,6 +56,14 @@ export function FigureBlock({
       case 'spin':
         group.current.rotation.y = (value * Math.PI) / 180
         break
+      case 'path': {
+        // ride the wand: translate along the coupler curve, pitch with it
+        const p = samplePath(signal.table, theta)
+        group.current.position.y = mech.shaftHeight + p.v
+        group.current.position.z = p.u + zOffset
+        group.current.rotation.x = -(p.pitchDeg * Math.PI) / 180
+        break
+      }
     }
   })
 

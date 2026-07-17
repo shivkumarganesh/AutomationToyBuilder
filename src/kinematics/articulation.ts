@@ -40,6 +40,10 @@ export function channelDisplacement(signal: ChannelSignal, theta: number): numbe
       const midDeg = (signal.table.min + signal.table.max) / 2
       return (Math.sin(channelValue(signal, theta) * DEG) - Math.sin(midDeg * DEG)) * L
     }
+    case 'path':
+      // the wand's vertical travel about its mean (channelValue is already
+      // mean-centred for path channels)
+      return channelValue(signal, theta)
     case 'spin':
       return 0
   }
@@ -54,6 +58,8 @@ export function channelHalfTravel(signal: ChannelSignal): number {
       const L = signal.channel.rocker.leverLength
       return ((Math.sin(signal.table.max * DEG) - Math.sin(signal.table.min * DEG)) * L) / 2
     }
+    case 'path':
+      return (signal.table.vMax - signal.table.vMin) / 2
     case 'spin':
       return 0
   }

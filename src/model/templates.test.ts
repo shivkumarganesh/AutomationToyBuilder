@@ -14,6 +14,9 @@ describe('template registry', () => {
       for (const signal of channelSignals(spec)) {
         if (signal.kind === 'spin') {
           expect(signal.ratio, `${key}/${signal.channel.id}`).not.toBe(0)
+        } else if (signal.kind === 'path') {
+          expect(signal.table.valid, `${key}/${signal.channel.id}`).toBe(true)
+          expect(signal.table.vMax - signal.table.vMin, key).toBeGreaterThan(0)
         } else {
           expect(Number.isFinite(signal.table.min), key).toBe(true)
           expect(Number.isFinite(signal.table.max), key).toBe(true)
