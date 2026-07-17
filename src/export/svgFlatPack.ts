@@ -227,10 +227,18 @@ export function generateParts(spec: AutomatonSpec): Part[] {
       holes.push(rect(t / 2, c, slotH, slotW))
       holes.push(rect(w - t / 2, c, slotH, slotW))
     }
-    // pushrod guide slots at each channel's stage position
+    // stage openings at each channel's position: square guide slots for
+    // pushrods and rocker posts, a round bushing hole for spinner spindles
     for (const ch of outputChannels(spec)) {
-      const size = ch.pushrod.rodWidth + 2 * GUIDE_CLEARANCE - kerf
-      holes.push(rect(ch.x + w / 2, d / 2, size, size))
+      if (ch.kind === 'lift') {
+        const size = ch.pushrod.rodWidth + 2 * GUIDE_CLEARANCE - kerf
+        holes.push(rect(ch.x + w / 2, d / 2, size, size))
+      } else if (ch.kind === 'tilt') {
+        const size = 6 + 2 * GUIDE_CLEARANCE - kerf
+        holes.push(rect(ch.x + w / 2, d / 2, size, size))
+      } else {
+        holes.push(circle(ch.x + w / 2, d / 2, (6 + 2 * GUIDE_CLEARANCE - kerf) / 2))
+      }
     }
     parts.push({ name: 'stage', outline, holes, width: w, height: d })
   }
@@ -266,6 +274,46 @@ export function generateParts(spec: AutomatonSpec): Part[] {
       holes: [hole],
       width: b.maxX - b.minX,
       height: b.maxY - b.minY,
+    })
+  }
+
+  // Spinner discs: keyed drive wheel for the camshaft, platform for the spindle.
+  for (const sp of mech.spinners) {
+    const wheel = growRadially(circle(0, 0, sp.wheelRadius, 64), kerf / 2)
+    const b1 = bounds(wheel)
+    parts.push({
+      name: `spinner-wheel-${sp.id}`,
+      outline: translate(wheel, -b1.minX, -b1.minY),
+      holes: [translate(dHolePath(mech.shaftDiameter - kerf, 0, 0), -b1.minX, -b1.minY)],
+      width: b1.maxX - b1.minX,
+      height: b1.maxY - b1.minY,
+    })
+    const platform = growRadially(circle(0, 0, sp.platformRadius, 72), kerf / 2)
+    const b2 = bounds(platform)
+    parts.push({
+      name: `spinner-platform-${sp.id}`,
+      outline: translate(platform, -b2.minX, -b2.minY),
+      holes: [translate(circle(0, 0, (6 - kerf) / 2), -b2.minX, -b2.minY)],
+      width: b2.maxX - b2.minX,
+      height: b2.maxY - b2.minY,
+    })
+  }
+
+  // Rocker levers: beam with a pivot hole at the fulcrum end.
+  for (const rocker of mech.rockers) {
+    const length = rocker.leverLength + 12
+    const beamW = 8
+    parts.push({
+      name: `rocker-lever-${rocker.id}`,
+      outline: [
+        { x: 0, y: 0 },
+        { x: length, y: 0 },
+        { x: length, y: beamW },
+        { x: 0, y: beamW },
+      ],
+      holes: [circle(6, beamW / 2, (3 - kerf) / 2)],
+      width: length,
+      height: beamW,
     })
   }
 

@@ -97,6 +97,7 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
 
   // Pushrods: square rod + flat follower pad, printed lying down.
   for (const ch of outputChannels(spec)) {
+    if (ch.kind !== 'lift') continue
     const { rodWidth, padWidth, length } = ch.pushrod
     const pad = new BoxGeometry(padWidth, PAD_THICKNESS, ch.cam.thickness + 2)
     place(pad, 0, PAD_THICKNESS / 2, 0)
@@ -117,6 +118,36 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
     shape.holes.push(dHole(shaftR + clearance))
     const geo = new ExtrudeGeometry(shape, { depth: cam.thickness, bevelEnabled: false })
     parts.push({ name: `cam-${cam.id}`, geometry: geo })
+  }
+
+  // Rocker levers: beam + follower pad, printed flat.
+  for (const rocker of mech.rockers) {
+    const beam = new BoxGeometry(6, 4, rocker.leverLength + 12)
+    const pad = new BoxGeometry(10, 3, rocker.padWidth)
+    place(pad, 0, -3.5, rocker.leverLength / 2 + 3)
+    parts.push({ name: `rocker-lever-${rocker.id}`, geometry: merge([beam, pad]) })
+  }
+
+  // Spinners: keyed drive wheel + spindle assembly (rod, driven disc, platform).
+  for (const sp of mech.spinners) {
+    const wheelShape = new Shape()
+    wheelShape.absarc(0, 0, sp.wheelRadius, 0, Math.PI * 2, false)
+    wheelShape.holes.push(dHole(shaftR + clearance))
+    const wheel = new ExtrudeGeometry(wheelShape, { depth: 8, bevelEnabled: false })
+    parts.push({ name: `spinner-wheel-${sp.id}`, geometry: wheel })
+
+    const spindleLength =
+      spec.frame.height + spec.frame.materialThickness + 8 - (mech.shaftHeight + sp.wheelRadius)
+    const rod = new CylinderGeometry(3, 3, spindleLength, 20)
+    rod.rotateX(Math.PI / 2) // axis along Z: prints standing up
+    place(rod, 0, 0, spindleLength / 2)
+    const driven = new CylinderGeometry(sp.wheelRadius * 0.9, sp.wheelRadius * 0.9, 4, 32)
+    driven.rotateX(Math.PI / 2)
+    place(driven, 0, 0, 2)
+    const platform = new CylinderGeometry(sp.platformRadius, sp.platformRadius, 4, 48)
+    platform.rotateX(Math.PI / 2)
+    place(platform, 0, 0, spindleLength - 2)
+    parts.push({ name: `spinner-spindle-${sp.id}`, geometry: merge([rod, driven, platform]) })
   }
 
   // Character figure blocks: body + head, printed upright.

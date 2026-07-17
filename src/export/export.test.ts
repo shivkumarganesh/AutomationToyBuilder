@@ -92,6 +92,7 @@ describe('SVG flat-pack', () => {
     const stage = parts.find((p) => p.name === 'stage')!
     const channels = outputChannels(spec)
     for (const ch of channels) {
+      if (ch.kind !== 'lift') continue
       const expectedX = ch.x + w / 2
       const slot = stage.holes.find((hole) => {
         const b = bounds(hole)

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { snailWoodpecker, templates } from './templates'
+import * as templatesModule from './templates'
 import { outputChannels } from './types'
 import { channelSignals } from '../kinematics/channels'
 import { flatPackSvg } from '../export/svgFlatPack'
@@ -11,9 +12,13 @@ describe('template registry', () => {
       const channels = outputChannels(spec)
       expect(channels.length, key).toBeGreaterThan(0)
       for (const signal of channelSignals(spec)) {
-        expect(Number.isFinite(signal.table.min), key).toBe(true)
-        expect(Number.isFinite(signal.table.max), key).toBe(true)
-        expect(signal.table.lift, `${key}/${signal.channel.id}`).toBeGreaterThan(0)
+        if (signal.kind === 'spin') {
+          expect(signal.ratio, `${key}/${signal.channel.id}`).not.toBe(0)
+        } else {
+          expect(Number.isFinite(signal.table.min), key).toBe(true)
+          expect(Number.isFinite(signal.table.max), key).toBe(true)
+          expect(signal.table.lift, `${key}/${signal.channel.id}`).toBeGreaterThan(0)
+        }
       }
       // characters only ride channels that exist
       for (const ch of spec.characters) {
@@ -38,9 +43,11 @@ describe('template registry', () => {
 })
 
 describe('snail cam woodpecker', () => {
-  const pecker = channelSignals(snailWoodpecker).find(
+  const found = channelSignals(snailWoodpecker).find(
     (s) => s.channel.id === 'rod-pecker',
   )!
+  if (found.kind !== 'lift') throw new Error('rod-pecker must be a lift channel')
+  const pecker = found
 
   it('rises gradually and drops sharply exactly once per revolution', () => {
     const { heights } = pecker.table
@@ -61,5 +68,23 @@ describe('snail cam woodpecker', () => {
   it('achieves most of the cam lift despite the follower pad width', () => {
     const camLift = 12
     expect(pecker.table.lift).toBeGreaterThan(camLift * 0.8)
+  })
+})
+
+describe('nod & spin carousel', () => {
+  it('exposes one tilt channel and one spin channel', () => {
+    const { nodAndSpin } = templatesModule
+    const signals = channelSignals(nodAndSpin)
+    const tilt = signals.find((s) => s.kind === 'tilt')
+    const spin = signals.find((s) => s.kind === 'spin')
+    expect(tilt).toBeDefined()
+    expect(spin).toBeDefined()
+    if (tilt?.kind === 'tilt') {
+      // eccentric-driven nod swings symmetrically around rest
+      expect(tilt.table.max).toBeGreaterThan(2)
+      expect(tilt.table.min).toBeLessThan(-2)
+      expect(Math.abs(tilt.table.max + tilt.table.min)).toBeLessThan(1)
+    }
+    if (spin?.kind === 'spin') expect(spin.ratio).toBe(1)
   })
 })

@@ -1,5 +1,5 @@
 import type { CamSpec } from '../model/types'
-import { MAX_CAMS, MIN_CAMS, useDesignerStore } from '../model/store'
+import { channelCount, MAX_CHANNELS, useDesignerStore } from '../model/store'
 import { NumberField } from './NumberField'
 import { ExportPanel } from './ExportPanel'
 import { SavePanel } from './SavePanel'
@@ -144,8 +144,14 @@ export function Sidebar() {
   const updatePushrod = useDesignerStore((s) => s.updatePushrod)
   const updateCharacter = useDesignerStore((s) => s.updateCharacter)
   const addCam = useDesignerStore((s) => s.addCam)
+  const addRocker = useDesignerStore((s) => s.addRocker)
+  const addSpinner = useDesignerStore((s) => s.addSpinner)
+  const removeSpinner = useDesignerStore((s) => s.removeSpinner)
+  const updateRocker = useDesignerStore((s) => s.updateRocker)
+  const updateSpinner = useDesignerStore((s) => s.updateSpinner)
   const addCharacter = useDesignerStore((s) => s.addCharacter)
   const removeCharacter = useDesignerStore((s) => s.removeCharacter)
+  const full = channelCount(spec) >= MAX_CHANNELS
 
   return (
     <aside className="sidebar">
@@ -212,20 +218,84 @@ export function Sidebar() {
             }
           />
           {spec.mechanism.cams.map((cam) => (
-            <CamControls
-              key={cam.id}
-              cam={cam}
-              removable={spec.mechanism.cams.length > MIN_CAMS}
-            />
+            <CamControls key={cam.id} cam={cam} removable={channelCount(spec) > 1} />
           ))}
-          <button
-            onClick={addCam}
-            disabled={spec.mechanism.cams.length >= MAX_CAMS}
-            style={{ width: '100%', marginTop: 4 }}
-          >
-            + Add cam {spec.mechanism.cams.length >= MAX_CAMS ? '(max 4)' : ''}
-          </button>
-          <div className="subhead">Pushrods (stage interface)</div>
+          {spec.mechanism.spinners.map((sp) => (
+            <div key={sp.id}>
+              <div className="subhead">
+                {sp.id} · spinner
+                <button
+                  className="icon-btn"
+                  title="Remove this spinner and figures riding it"
+                  onClick={() => removeSpinner(sp.id)}
+                >
+                  ✕
+                </button>
+              </div>
+              <NumberField
+                label="Spin ratio (revs per crank turn)"
+                value={sp.ratio}
+                min={-3}
+                max={3}
+                step={0.25}
+                unit="×"
+                onChange={(v) => updateSpinner(sp.id, { ratio: v })}
+              />
+              <NumberField
+                label="Drive wheel radius"
+                value={sp.wheelRadius}
+                min={6}
+                max={30}
+                onChange={(v) => updateSpinner(sp.id, { wheelRadius: v })}
+              />
+              <NumberField
+                label="Platform radius"
+                value={sp.platformRadius}
+                min={10}
+                max={60}
+                onChange={(v) => updateSpinner(sp.id, { platformRadius: v })}
+              />
+              <NumberField
+                label="Position on shaft"
+                value={Math.round(sp.position * 100)}
+                min={10}
+                max={90}
+                unit="%"
+                onChange={(v) => updateSpinner(sp.id, { position: v / 100 })}
+              />
+            </div>
+          ))}
+          <div className="row" style={{ marginTop: 4 }}>
+            <button onClick={addCam} disabled={full} style={{ flex: 1 }}>
+              + Cam
+            </button>
+            <button onClick={addRocker} disabled={full} style={{ flex: 1 }}>
+              + Rocker
+            </button>
+            <button onClick={addSpinner} disabled={full} style={{ flex: 1 }}>
+              + Spinner
+            </button>
+          </div>
+          {full && <p className="hint">Channel limit reached (4).</p>}
+          <div className="subhead">Stage interface</div>
+          {spec.mechanism.rockers.map((rocker) => (
+            <div key={rocker.id}>
+              <NumberField
+                label={`${rocker.id} · lever length`}
+                value={rocker.leverLength}
+                min={10}
+                max={80}
+                onChange={(v) => updateRocker(rocker.id, { leverLength: v })}
+              />
+              <NumberField
+                label={`${rocker.id} · follower pad width`}
+                value={rocker.padWidth}
+                min={4}
+                max={40}
+                onChange={(v) => updateRocker(rocker.id, { padWidth: v })}
+              />
+            </div>
+          ))}
           {spec.mechanism.pushrods.map((rod) => (
             <div key={rod.id}>
               <NumberField

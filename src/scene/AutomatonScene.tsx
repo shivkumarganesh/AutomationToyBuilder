@@ -1,6 +1,7 @@
 import { Canvas } from '@react-three/fiber'
 import { Grid, OrbitControls } from '@react-three/drei'
 import { useDesignerStore } from '../model/store'
+import { camWorldX } from '../model/types'
 import { useChannels } from './useChannels'
 import { CrankDriver } from './CrankDriver'
 import { FrameBox } from './FrameBox'
@@ -8,6 +9,8 @@ import { Camshaft } from './mechanism/Camshaft'
 import { Crank } from './mechanism/Crank'
 import { Cam } from './mechanism/Cam'
 import { Pushrod } from './mechanism/Pushrod'
+import { Rocker } from './mechanism/Rocker'
+import { Spinner } from './mechanism/Spinner'
 import { FigureBlock } from './character/FigureBlock'
 
 /**
@@ -32,12 +35,19 @@ export function AutomatonScene() {
       <group name="mechanism">
         <Camshaft />
         <Crank />
-        {channels.map(({ channel }) => (
-          <Cam key={channel.cam.id} cam={channel.cam} x={channel.x} />
+        {spec.mechanism.cams.map((cam) => (
+          <Cam key={cam.id} cam={cam} x={camWorldX(spec.frame, cam.position)} />
         ))}
-        {channels.map((signal) => (
-          <Pushrod key={signal.channel.id} signal={signal} />
-        ))}
+        {channels.map((signal) => {
+          switch (signal.kind) {
+            case 'lift':
+              return <Pushrod key={signal.channel.id} signal={signal} />
+            case 'tilt':
+              return <Rocker key={signal.channel.id} signal={signal} />
+            case 'spin':
+              return <Spinner key={signal.channel.id} signal={signal} />
+          }
+        })}
       </group>
 
       {/* character zone — above the stage; figures sharing a channel fan out in Z */}

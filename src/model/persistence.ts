@@ -86,6 +86,11 @@ export function parseSpec(json: string): AutomatonSpec {
   if (!Array.isArray(mech.cams) || mech.cams.length < 1 || mech.cams.length > 8)
     fail('mechanism.cams must be a non-empty array')
   if (!Array.isArray(mech.pushrods)) fail('mechanism.pushrods must be an array')
+  // rockers/spinners were added after v1 — older saves simply omit them
+  const rawRockers = mech.rockers === undefined ? [] : mech.rockers
+  const rawSpinners = mech.spinners === undefined ? [] : mech.spinners
+  if (!Array.isArray(rawRockers)) fail('mechanism.rockers must be an array')
+  if (!Array.isArray(rawSpinners)) fail('mechanism.spinners must be an array')
   if (!Array.isArray(o.characters)) fail('characters must be an array')
   const crank = mech.crank as Record<string, unknown>
   if (typeof crank !== 'object' || crank === null) fail('mechanism.crank missing')
@@ -109,8 +114,38 @@ export function parseSpec(json: string): AutomatonSpec {
     if (!camIds.has(rod.camId)) fail(`pushrod[${i}] references unknown cam ${rod.camId}`)
     return rod
   })
-  const rodIds = new Set(pushrods.map((r) => r.id))
-  if (rodIds.size !== pushrods.length) fail('pushrod ids must be unique')
+  const rockers = rawRockers.map((raw, i) => {
+    const r = raw as Record<string, unknown>
+    if (typeof r !== 'object' || r === null) fail(`rocker[${i}] must be an object`)
+    const rocker = {
+      id: str(r.id, `rocker[${i}].id`),
+      camId: str(r.camId, `rocker[${i}].camId`),
+      leverLength: num(r.leverLength, `rocker[${i}].leverLength`, 5, 200),
+      padWidth: num(r.padWidth, `rocker[${i}].padWidth`, 2, 60),
+    }
+    if (!camIds.has(rocker.camId)) fail(`rocker[${i}] references unknown cam ${rocker.camId}`)
+    return rocker
+  })
+
+  const spinners = rawSpinners.map((raw, i) => {
+    const sp = raw as Record<string, unknown>
+    if (typeof sp !== 'object' || sp === null) fail(`spinner[${i}] must be an object`)
+    return {
+      id: str(sp.id, `spinner[${i}].id`),
+      position: num(sp.position, `spinner[${i}].position`, 0, 1),
+      ratio: num(sp.ratio, `spinner[${i}].ratio`, -10, 10),
+      wheelRadius: num(sp.wheelRadius, `spinner[${i}].wheelRadius`, 4, 60),
+      platformRadius: num(sp.platformRadius, `spinner[${i}].platformRadius`, 5, 120),
+    }
+  })
+
+  const rodIds = new Set([
+    ...pushrods.map((r) => r.id),
+    ...rockers.map((r) => r.id),
+    ...spinners.map((sp) => sp.id),
+  ])
+  if (rodIds.size !== pushrods.length + rockers.length + spinners.length)
+    fail('output channel ids must be unique')
 
   const characters = o.characters.map((raw, i) => {
     const c = raw as Record<string, unknown>
@@ -147,6 +182,8 @@ export function parseSpec(json: string): AutomatonSpec {
       },
       cams,
       pushrods,
+      rockers,
+      spinners,
     },
     characters,
     export: {

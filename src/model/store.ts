@@ -7,6 +7,8 @@ import type {
   FrameSpec,
   MechanismSpec,
   PushrodSpec,
+  RockerSpec,
+  SpinnerSpec,
 } from './types'
 import { loadInitialSpec, saveToLocalStorage } from './persistence'
 
@@ -31,28 +33,42 @@ interface DesignerState {
   updateMechanism: (patch: Partial<Omit<MechanismSpec, 'cams' | 'pushrods'>>) => void
   updateCam: (id: string, patch: Partial<CamSpec>) => void
   updatePushrod: (id: string, patch: Partial<PushrodSpec>) => void
+  updateRocker: (id: string, patch: Partial<RockerSpec>) => void
+  updateSpinner: (id: string, patch: Partial<SpinnerSpec>) => void
   updateCharacter: (id: string, patch: Partial<CharacterSpec>) => void
   updateExport: (patch: Partial<ExportSettings>) => void
   loadTemplate: (spec: AutomatonSpec) => void
 
-  /** Add a complete channel unit: cam + pushrod + figure riding it. */
+  /** Add a complete lift unit: cam + pushrod + figure riding it. */
   addCam: () => void
-  /** Remove a cam with its pushrod and any characters riding that channel. */
+  /** Add a complete tilt unit: cam + rocker lever + nodding figure. */
+  addRocker: () => void
+  /** Add a complete spin unit: friction wheel + spindle + figure on the platform. */
+  addSpinner: () => void
+  /** Remove a cam with its pushrods/rockers and any characters on those channels. */
   removeCam: (id: string) => void
+  removeSpinner: (id: string) => void
   /** Add a figure bound to the first output channel. */
   addCharacter: () => void
   removeCharacter: (id: string) => void
 }
 
 /** Chart palette carries four validated series slots; the box also gets crowded. */
-export const MAX_CAMS = 4
-export const MIN_CAMS = 1
+export const MAX_CHANNELS = 4
+export const MIN_CHANNELS = 1
+
+export function channelCount(spec: AutomatonSpec): number {
+  const m = spec.mechanism
+  return m.pushrods.length + m.rockers.length + m.spinners.length
+}
 
 /** Next free numeric suffix across all mechanism/character ids. */
 function nextIndex(spec: AutomatonSpec): number {
   const ids = [
     ...spec.mechanism.cams.map((c) => c.id),
     ...spec.mechanism.pushrods.map((r) => r.id),
+    ...spec.mechanism.rockers.map((r) => r.id),
+    ...spec.mechanism.spinners.map((r) => r.id),
     ...spec.characters.map((c) => c.id),
   ]
   let max = 0
@@ -65,7 +81,11 @@ function nextIndex(spec: AutomatonSpec): number {
 
 /** Midpoint of the widest free stretch of shaft, keeping clear of the walls. */
 function freeShaftPosition(spec: AutomatonSpec): number {
-  const bounds = [0.08, ...spec.mechanism.cams.map((c) => c.position).sort((a, b) => a - b), 0.92]
+  const used = [
+    ...spec.mechanism.cams.map((c) => c.position),
+    ...spec.mechanism.spinners.map((sp) => sp.position),
+  ].sort((a, b) => a - b)
+  const bounds = [0.08, ...used, 0.92]
   let bestGap = 0
   let best = 0.5
   for (let i = 0; i < bounds.length - 1; i++) {
@@ -128,6 +148,32 @@ export const useDesignerStore = create<DesignerState>((set) => ({
       },
     })),
 
+  updateRocker: (id, patch) =>
+    set((s) => ({
+      spec: {
+        ...s.spec,
+        mechanism: {
+          ...s.spec.mechanism,
+          rockers: s.spec.mechanism.rockers.map((r) =>
+            r.id === id ? { ...r, ...patch } : r,
+          ),
+        },
+      },
+    })),
+
+  updateSpinner: (id, patch) =>
+    set((s) => ({
+      spec: {
+        ...s.spec,
+        mechanism: {
+          ...s.spec.mechanism,
+          spinners: s.spec.mechanism.spinners.map((sp) =>
+            sp.id === id ? { ...sp, ...patch } : sp,
+          ),
+        },
+      },
+    })),
+
   updateCharacter: (id, patch) =>
     set((s) => ({
       spec: {
@@ -143,7 +189,7 @@ export const useDesignerStore = create<DesignerState>((set) => ({
 
   addCam: () =>
     set((s) => {
-      if (s.spec.mechanism.cams.length >= MAX_CAMS) return {}
+      if (channelCount(s.spec) >= MAX_CHANNELS) return {}
       const n = nextIndex(s.spec)
       const rodId = `rod-${n}`
       const cam: CamSpec = {
@@ -179,12 +225,85 @@ export const useDesignerStore = create<DesignerState>((set) => ({
       }
     }),
 
+  addRocker: () =>
+    set((s) => {
+      if (channelCount(s.spec) >= MAX_CHANNELS) return {}
+      const n = nextIndex(s.spec)
+      const rockerId = `rock-${n}`
+      const cam: CamSpec = {
+        id: `cam-${n}`,
+        kind: 'eccentric',
+        radius: 16,
+        eccentricity: 6,
+        position: freeShaftPosition(s.spec),
+        phaseDeg: 0,
+        thickness: 6,
+      }
+      const rocker: RockerSpec = { id: rockerId, camId: cam.id, leverLength: 30, padWidth: 14 }
+      const figure: CharacterSpec = {
+        id: `figure-${n}`,
+        channelId: rockerId,
+        kind: 'block',
+        width: 18,
+        height: 24,
+        depth: 15,
+        color: FIGURE_COLORS[(n - 1) % FIGURE_COLORS.length],
+        label: `Nodder ${n}`,
+      }
+      return {
+        spec: {
+          ...s.spec,
+          mechanism: {
+            ...s.spec.mechanism,
+            cams: [...s.spec.mechanism.cams, cam],
+            rockers: [...s.spec.mechanism.rockers, rocker],
+          },
+          characters: [...s.spec.characters, figure],
+        },
+      }
+    }),
+
+  addSpinner: () =>
+    set((s) => {
+      if (channelCount(s.spec) >= MAX_CHANNELS) return {}
+      const n = nextIndex(s.spec)
+      const spinnerId = `spin-${n}`
+      const spinner: SpinnerSpec = {
+        id: spinnerId,
+        position: freeShaftPosition(s.spec),
+        ratio: 1,
+        wheelRadius: 14,
+        platformRadius: 26,
+      }
+      const figure: CharacterSpec = {
+        id: `figure-${n}`,
+        channelId: spinnerId,
+        kind: 'block',
+        width: 14,
+        height: 22,
+        depth: 12,
+        color: FIGURE_COLORS[(n - 1) % FIGURE_COLORS.length],
+        label: `Rider ${n}`,
+      }
+      return {
+        spec: {
+          ...s.spec,
+          mechanism: {
+            ...s.spec.mechanism,
+            spinners: [...s.spec.mechanism.spinners, spinner],
+          },
+          characters: [...s.spec.characters, figure],
+        },
+      }
+    }),
+
   removeCam: (id) =>
     set((s) => {
-      if (s.spec.mechanism.cams.length <= MIN_CAMS) return {}
-      const removedRods = s.spec.mechanism.pushrods
-        .filter((r) => r.camId === id)
-        .map((r) => r.id)
+      const removedChannels = [
+        ...s.spec.mechanism.pushrods.filter((r) => r.camId === id),
+        ...s.spec.mechanism.rockers.filter((r) => r.camId === id),
+      ].map((r) => r.id)
+      if (channelCount(s.spec) - removedChannels.length < MIN_CHANNELS) return {}
       return {
         spec: {
           ...s.spec,
@@ -192,15 +311,34 @@ export const useDesignerStore = create<DesignerState>((set) => ({
             ...s.spec.mechanism,
             cams: s.spec.mechanism.cams.filter((c) => c.id !== id),
             pushrods: s.spec.mechanism.pushrods.filter((r) => r.camId !== id),
+            rockers: s.spec.mechanism.rockers.filter((r) => r.camId !== id),
           },
-          characters: s.spec.characters.filter((c) => !removedRods.includes(c.channelId)),
+          characters: s.spec.characters.filter((c) => !removedChannels.includes(c.channelId)),
+        },
+      }
+    }),
+
+  removeSpinner: (id) =>
+    set((s) => {
+      if (channelCount(s.spec) <= MIN_CHANNELS) return {}
+      return {
+        spec: {
+          ...s.spec,
+          mechanism: {
+            ...s.spec.mechanism,
+            spinners: s.spec.mechanism.spinners.filter((sp) => sp.id !== id),
+          },
+          characters: s.spec.characters.filter((c) => c.channelId !== id),
         },
       }
     }),
 
   addCharacter: () =>
     set((s) => {
-      const firstChannel = s.spec.mechanism.pushrods[0]
+      const firstChannel =
+        s.spec.mechanism.pushrods[0] ??
+        s.spec.mechanism.rockers[0] ??
+        s.spec.mechanism.spinners[0]
       if (!firstChannel) return {}
       const n = nextIndex(s.spec)
       const figure: CharacterSpec = {
