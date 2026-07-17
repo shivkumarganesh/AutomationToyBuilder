@@ -17,6 +17,7 @@ import {
   limbPinRests,
   limbPivotFrac,
   limbPlateOutline,
+  remoteWireZ,
   sourceTipRestY,
   standHeight,
 } from '../scene/figureLayout'
@@ -439,27 +440,58 @@ function wireCrank(
     return merge([yoke, riser, pad])
   }
 
-  // head/tail: flat L-crank in one plane — vertical run, horizontal
-  // reach, washer end that drops over the pin
   const pin = pins[0]
-  const reach = Math.hypot(pin.x - sx, pin.z)
-  const shape = new Shape()
-  const h = WIRE_SECTION
-  shape.moveTo(-h / 2, 0)
-  shape.lineTo(h / 2, 0)
-  shape.lineTo(h / 2, run - h)
-  shape.lineTo(reach, run - h)
-  shape.lineTo(reach, run)
-  shape.lineTo(-h / 2, run)
-  shape.closePath()
+  const remote = limb.channelId !== character.channelId
+
+  if (!remote) {
+    // head/tail on the figure's own rod: flat L-crank in one plane —
+    // vertical run, horizontal reach, washer end that drops over the pin
+    const reach = Math.hypot(pin.x - sx, pin.z)
+    const shape = new Shape()
+    const h = WIRE_SECTION
+    shape.moveTo(-h / 2, 0)
+    shape.lineTo(h / 2, 0)
+    shape.lineTo(h / 2, run - h)
+    shape.lineTo(reach, run - h)
+    shape.lineTo(reach, run)
+    shape.lineTo(-h / 2, run)
+    shape.closePath()
+    const washer = new Shape()
+    washer.absarc(reach, run - h / 2, 3, 0, Math.PI * 2, false)
+    const washerHole = new Shape()
+    washerHole.absarc(reach, run - h / 2, LIMB_PIN_DIAMETER / 2 + clearance, 0, Math.PI * 2, true)
+    washer.holes.push(washerHole)
+    const arm = new ExtrudeGeometry(shape, { depth: WIRE_SECTION, bevelEnabled: false })
+    const end = new ExtrudeGeometry(washer, { depth: WIRE_SECTION, bevelEnabled: false })
+    return merge([arm, end])
+  }
+
+  // remote head/tail: three orthogonal segments matching the routed wire —
+  // setback (at rod-tip level, ducking behind the wing sweep), riser (up
+  // the pin's depth plane), arm across to the pin with a washer end.
+  // Built in assembled orientation: X along the shaft, Y up, Z depth.
+  const riserZ = remoteWireZ(character, limb)
+  const w = WIRE_SECTION
+  const setbackLen = Math.abs(riserZ)
+  const setback = new BoxGeometry(w, w, setbackLen)
+  place(setback, 0, 0, riserZ / 2)
+  const riser = new BoxGeometry(w, run, w)
+  place(riser, 0, run / 2, riserZ)
+  const armVec = { x: -sx, z: pin.z - riserZ }
+  const armLen = Math.hypot(armVec.x, armVec.z)
+  const armGeo = new BoxGeometry(armLen, w, w)
+  armGeo.rotateY(-Math.atan2(armVec.z, armVec.x))
+  place(armGeo, -sx / 2, run - w / 2, (pin.z + riserZ) / 2)
+  // washer over the pin (pin axis runs along X)
   const washer = new Shape()
-  washer.absarc(reach, run - h / 2, 3, 0, Math.PI * 2, false)
-  const washerHole = new Shape()
-  washerHole.absarc(reach, run - h / 2, LIMB_PIN_DIAMETER / 2 + clearance, 0, Math.PI * 2, true)
-  washer.holes.push(washerHole)
-  const arm = new ExtrudeGeometry(shape, { depth: WIRE_SECTION, bevelEnabled: false })
-  const end = new ExtrudeGeometry(washer, { depth: WIRE_SECTION, bevelEnabled: false })
-  return merge([arm, end])
+  washer.absarc(0, 0, 3, 0, Math.PI * 2, false)
+  const hole = new Shape()
+  hole.absarc(0, 0, LIMB_PIN_DIAMETER / 2 + clearance, 0, Math.PI * 2, true)
+  washer.holes.push(hole)
+  const end = new ExtrudeGeometry(washer, { depth: w, bevelEnabled: false })
+  end.rotateY(Math.PI / 2) // extrusion (hole axis) along X
+  place(end, -sx, run - w / 2, pin.z)
+  return merge([setback, riser, armGeo, end])
 }
 
 const LIMB_PLATE_THICKNESS = 3

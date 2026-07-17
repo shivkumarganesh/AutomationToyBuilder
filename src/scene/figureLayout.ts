@@ -139,6 +139,27 @@ export function wingTipRise(a: number, length: number): number {
 /** Height of the hinge stand under tilt-riding block figures (FigureBlock). */
 export const HINGE_HEIGHT = 4
 
+/**
+ * Depth-plane a REMOTE drive wire (source channel ≠ the figure's own
+ * channel) rises in. Wings sweep the z-band around the body (± their
+ * chord), so a remote wire must set back to the pin's depth FIRST — at
+ * rod-tip level, below the sweep — then rise and run to the pin entirely
+ * behind the flapping plane.
+ */
+export function remoteWireZ(character: CharacterSpec, limb: LimbSpec): number {
+  return limb.kind === 'head' ? -limb.crankArm : -character.depth / 2 - limb.crankArm
+}
+
+/**
+ * Lowest point the wing plates ever sweep (world Y): the shoulder pivot
+ * minus the full plate reach at the peak flap angle, minus the plate
+ * half-thickness. Everything a neighbouring channel raises (rod tops,
+ * wire setbacks) must stay BELOW this line.
+ */
+export function wingSweepMinY(pivotY: number, wings: LimbSpec, maxAngle: number): number {
+  return pivotY - (wings.length + 2) * Math.sin(maxAngle) - LIMB_THICKNESS / 2
+}
+
 /** Limb pivot axle diameter — plates and body holes are sized around it. */
 export const LIMB_AXLE_DIAMETER = 3
 /** Drive pin diameter (the scene renders r = 1.2 pins). */

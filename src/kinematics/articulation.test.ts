@@ -12,9 +12,11 @@ import {
   bodyBaseY,
   limbPivotFrac,
   pinRise,
+  remoteWireZ,
   sourceTipRestY,
   WIRE_REST_RUN,
   wingRotations,
+  wingSweepMinY,
   wingTipRise,
 } from '../scene/figureLayout'
 
@@ -150,6 +152,28 @@ describe('articulated figure layout (Flapping Bird)', () => {
       const tipY = tipRest + channelDisplacement(signal, theta)
       expect(pinY - tipY, `at ${deg}°`).toBeCloseTo(run, 9)
     }
+  })
+
+  it('nothing the wag channel raises enters the wing sweep', () => {
+    // the wings sweep a fan below their shoulder pivots; the neighbouring
+    // rod top, the tail wire's setback, and its riser must all stay clear
+    const wings = limbs.find((l) => l.kind === 'wings')!
+    const tail = limbs.find((l) => l.kind === 'tail')!
+    const wingSignal = signalFor(wings.channelId)
+    const wagSignal = signalFor(tail.channelId)
+    if (wagSignal.kind !== 'lift') throw new Error('rod-wag must be a lift channel')
+    const baseY = bodyBaseY(flappingBird, bird, signals)
+    const pivotY = baseY + limbPivotFrac('wings') * bird.height
+    const sweepMin = wingSweepMinY(pivotY, wings, limbMaxAngle(wingSignal, wings))
+
+    // rod top at its highest (and the wire setback runs at rod-tip level)
+    const shaftY = flappingBird.mechanism.shaftHeight
+    const rodTopMax = shaftY + wagSignal.table.max + 4 + wagSignal.channel.pushrod.length
+    expect(rodTopMax + 2).toBeLessThan(sweepMin)
+
+    // the riser and arm run behind the flapping plane: clear of the chord
+    const riserZ = remoteWireZ(bird, tail)
+    expect(riserZ).toBeLessThan(-wings.width / 2 - 2)
   })
 
   it('head and wings share the flap rod but keep independent linkage geometry', () => {
