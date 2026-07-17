@@ -11,7 +11,7 @@ const PAD_THICKNESS = 4
  * Vertical pushrod with its flat follower pad — the physical carrier of
  * one output channel through the stage guide slot.
  */
-export function Pushrod({ signal }: { signal: ChannelSignal }) {
+export function Pushrod({ signal }: { signal: ChannelSignal & { kind: 'lift' } }) {
   const shaftHeight = useDesignerStore((s) => s.spec.mechanism.shaftHeight)
   const group = useRef<Group>(null)
   const { channel, table } = signal

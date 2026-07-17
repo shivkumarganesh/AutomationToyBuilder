@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { MAX_CAMS, useDesignerStore } from './store'
+import { channelCount, MAX_CHANNELS, useDesignerStore } from './store'
 import { simplestAutomaton } from './templates'
 import { outputChannels } from './types'
 import { channelSignals } from '../kinematics/channels'
@@ -20,7 +20,7 @@ describe('addCam', () => {
     expect(spec.characters).toHaveLength(before.characters.length + 1)
     // the new unit is fully wired: channels resolve and produce motion
     for (const signal of channelSignals(spec)) {
-      expect(signal.table.lift).toBeGreaterThan(0)
+      if (signal.kind !== 'spin') expect(signal.table.lift).toBeGreaterThan(0)
     }
   })
 
@@ -36,9 +36,43 @@ describe('addCam', () => {
     }
   })
 
-  it('caps the mechanism at MAX_CAMS', () => {
+  it('caps the mechanism at MAX_CHANNELS across all output kinds', () => {
     for (let i = 0; i < 10; i++) state().addCam()
-    expect(state().spec.mechanism.cams).toHaveLength(MAX_CAMS)
+    expect(channelCount(state().spec)).toBe(MAX_CHANNELS)
+    state().addRocker()
+    state().addSpinner()
+    expect(channelCount(state().spec)).toBe(MAX_CHANNELS)
+  })
+
+  it('addRocker adds a cam-driven tilt channel with a nodding figure', () => {
+    state().addRocker()
+    const spec = state().spec
+    expect(spec.mechanism.rockers).toHaveLength(1)
+    const rocker = spec.mechanism.rockers[0]
+    expect(spec.mechanism.cams.some((c) => c.id === rocker.camId)).toBe(true)
+    expect(spec.characters.some((c) => c.channelId === rocker.id)).toBe(true)
+    const signal = channelSignals(spec).find((s) => s.channel.id === rocker.id)!
+    expect(signal.kind).toBe('tilt')
+    if (signal.kind === 'tilt') expect(signal.table.lift).toBeGreaterThan(0)
+  })
+
+  it('addSpinner adds a spin channel and removeSpinner cleans it up', () => {
+    state().addSpinner()
+    const spinner = state().spec.mechanism.spinners[0]
+    expect(spinner).toBeDefined()
+    const signal = channelSignals(state().spec).find((s) => s.channel.id === spinner.id)!
+    expect(signal.kind).toBe('spin')
+    state().removeSpinner(spinner.id)
+    expect(state().spec.mechanism.spinners).toHaveLength(0)
+    expect(state().spec.characters.some((c) => c.channelId === spinner.id)).toBe(false)
+  })
+
+  it('removing a cam also removes rockers it drives', () => {
+    state().addRocker()
+    const rocker = state().spec.mechanism.rockers[0]
+    state().removeCam(rocker.camId)
+    expect(state().spec.mechanism.rockers).toHaveLength(0)
+    expect(state().spec.characters.some((c) => c.channelId === rocker.id)).toBe(false)
   })
 })
 

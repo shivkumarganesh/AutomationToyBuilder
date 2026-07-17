@@ -53,6 +53,8 @@ export const simplestAutomaton: AutomatonSpec = {
       { id: 'rod-a', camId: 'cam-eccentric', rodWidth: 6, padWidth: 24, length: 60 },
       { id: 'rod-b', camId: 'cam-petal', rodWidth: 6, padWidth: 20, length: 60 },
     ],
+    rockers: [],
+    spinners: [],
   },
   characters: [
     {
@@ -129,6 +131,8 @@ export const snailWoodpecker: AutomatonSpec = {
       { id: 'rod-pecker', camId: 'cam-snail', rodWidth: 6, padWidth: 8, length: 60 },
       { id: 'rod-chick', camId: 'cam-bob', rodWidth: 6, padWidth: 20, length: 60 },
     ],
+    rockers: [],
+    spinners: [],
   },
   characters: [
     {
@@ -158,7 +162,75 @@ export const snailWoodpecker: AutomatonSpec = {
   },
 }
 
+/**
+ * Nod & Spin Carousel — the third toy, showing the non-lift output
+ * channels: a cam-driven rocker makes a bird nod (tilt channel) while a
+ * friction wheel on the same shaft spins a carousel platform with a
+ * dancer riding it (spin channel).
+ */
+export const nodAndSpin: AutomatonSpec = {
+  name: 'Nod & Spin Carousel',
+  frame: {
+    width: 180,
+    depth: 90,
+    height: 100,
+    materialThickness: 3,
+  },
+  mechanism: {
+    shaftDiameter: 6,
+    shaftHeight: 45,
+    crank: {
+      armLength: 25,
+      handleLength: 30,
+      handleDiameter: 10,
+    },
+    cams: [
+      {
+        id: 'cam-nod',
+        kind: 'eccentric',
+        radius: 16,
+        eccentricity: 6,
+        position: 0.25,
+        phaseDeg: 0,
+        thickness: 6,
+      },
+    ],
+    pushrods: [],
+    rockers: [{ id: 'rock-nod', camId: 'cam-nod', leverLength: 30, padWidth: 14 }],
+    spinners: [
+      { id: 'spin-stage', position: 0.68, ratio: 1, wheelRadius: 14, platformRadius: 28 },
+    ],
+  },
+  characters: [
+    {
+      id: 'figure-nodder',
+      channelId: 'rock-nod',
+      kind: 'block',
+      width: 18,
+      height: 24,
+      depth: 14,
+      color: '#4fb06a',
+      label: 'Nodding Bird',
+    },
+    {
+      id: 'figure-dancer',
+      channelId: 'spin-stage',
+      kind: 'block',
+      width: 14,
+      height: 22,
+      depth: 12,
+      color: '#8a6fe8',
+      label: 'Dancer',
+    },
+  ],
+  export: {
+    kerf: 0.1,
+    fdmClearance: 0.2,
+  },
+}
+
 export const templates: Record<string, AutomatonSpec> = {
   simplest: simplestAutomaton,
   woodpecker: snailWoodpecker,
+  nodspin: nodAndSpin,
 }

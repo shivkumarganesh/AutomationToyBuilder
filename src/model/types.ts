@@ -77,7 +77,7 @@ export type CamSpec = EccentricCamSpec | PetalCamSpec | SnailCamSpec
 
 /**
  * A vertical rod riding its cam through a flat follower pad, guided by a
- * square slot in the stage. One pushrod = one output channel.
+ * square slot in the stage. One pushrod = one LIFT output channel.
  */
 export interface PushrodSpec {
   id: string
@@ -89,6 +89,37 @@ export interface PushrodSpec {
   padWidth: number
   /** Rod length from the follower pad top to the rod tip above the stage. */
   length: number
+}
+
+/**
+ * A pivoted lever riding its cam: the cam's lift becomes a rocking angle
+ * (nodding motion). One rocker = one TILT output channel, in degrees.
+ */
+export interface RockerSpec {
+  id: string
+  /** The cam that drives this lever. */
+  camId: string
+  /** Horizontal distance from the pivot to the follower contact point. */
+  leverLength: number
+  /** Width of the flat follower pad on the cam end of the lever. */
+  padWidth: number
+}
+
+/**
+ * A friction/crown wheel on the camshaft driving a vertical spindle up
+ * through the stage. One spinner = one SPIN output channel: continuous
+ * rotation at `ratio` output revolutions per crank revolution.
+ */
+export interface SpinnerSpec {
+  id: string
+  /** Position along the shaft, fraction of the interior width. */
+  position: number
+  /** Output revolutions per crank revolution. */
+  ratio: number
+  /** Radius of the drive wheel on the camshaft. */
+  wheelRadius: number
+  /** Radius of the platform disc above the stage. */
+  platformRadius: number
 }
 
 export interface CrankSpec {
@@ -107,6 +138,8 @@ export interface MechanismSpec {
   crank: CrankSpec
   cams: CamSpec[]
   pushrods: PushrodSpec[]
+  rockers: RockerSpec[]
+  spinners: SpinnerSpec[]
 }
 
 /** Everything above the stage plate. */
@@ -139,16 +172,18 @@ export interface AutomatonSpec {
 }
 
 /**
- * The stage-interface contract: where a channel surfaces on the stage and
- * what drives it. Derived from the spec, consumed by scene + exports.
+ * The stage-interface contract: where a channel surfaces on the stage,
+ * what motion it carries, and what drives it. Derived from the spec,
+ * consumed by scene + analysis + exports.
+ *
+ *  - lift: vertical displacement in mm (cam + pushrod)
+ *  - tilt: rocking angle in degrees (cam + pivoted lever)
+ *  - spin: continuous rotation, `ratio` output revs per crank rev
  */
-export interface OutputChannel {
-  id: string
-  cam: CamSpec
-  pushrod: PushrodSpec
-  /** Channel position along the shaft in world X (mm, box-centre origin). */
-  x: number
-}
+export type OutputChannel =
+  | { kind: 'lift'; id: string; x: number; cam: CamSpec; pushrod: PushrodSpec }
+  | { kind: 'tilt'; id: string; x: number; cam: CamSpec; rocker: RockerSpec }
+  | { kind: 'spin'; id: string; x: number; spinner: SpinnerSpec }
 
 /** Interior width between the two side panels. */
 export function interiorWidth(frame: FrameSpec): number {
@@ -161,13 +196,31 @@ export function camWorldX(frame: FrameSpec, position: number): number {
   return -inner / 2 + position * inner
 }
 
-/** Resolve the spec's stage interface: one output channel per pushrod. */
+/** Resolve the spec's stage interface: one output channel per output device. */
 export function outputChannels(spec: AutomatonSpec): OutputChannel[] {
-  return spec.mechanism.pushrods.map((rod) => {
-    const cam = spec.mechanism.cams.find((c) => c.id === rod.camId)
-    if (!cam) throw new Error(`Pushrod ${rod.id} references unknown cam ${rod.camId}`)
-    return { id: rod.id, cam, pushrod: rod, x: camWorldX(spec.frame, cam.position) }
-  })
+  const camById = (id: string, owner: string): CamSpec => {
+    const cam = spec.mechanism.cams.find((c) => c.id === id)
+    if (!cam) throw new Error(`${owner} references unknown cam ${id}`)
+    return cam
+  }
+  return [
+    ...spec.mechanism.pushrods.map((rod): OutputChannel => {
+      const cam = camById(rod.camId, `Pushrod ${rod.id}`)
+      return { kind: 'lift', id: rod.id, cam, pushrod: rod, x: camWorldX(spec.frame, cam.position) }
+    }),
+    ...spec.mechanism.rockers.map((rocker): OutputChannel => {
+      const cam = camById(rocker.camId, `Rocker ${rocker.id}`)
+      return { kind: 'tilt', id: rocker.id, cam, rocker, x: camWorldX(spec.frame, cam.position) }
+    }),
+    ...spec.mechanism.spinners.map(
+      (spinner): OutputChannel => ({
+        kind: 'spin',
+        id: spinner.id,
+        spinner,
+        x: camWorldX(spec.frame, spinner.position),
+      }),
+    ),
+  ]
 }
 
 /** Largest radius the cam profile reaches — used for clearances and layout. */

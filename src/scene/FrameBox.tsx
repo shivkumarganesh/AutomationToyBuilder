@@ -51,13 +51,23 @@ export function FrameBox() {
         <boxGeometry args={[w, t, d]} />
         <meshStandardMaterial color={WOOD_DARK} />
       </mesh>
-      {/* guide-slot markers where each output channel surfaces */}
-      {channels.map(({ channel }) => (
-        <mesh key={channel.id} position={[channel.x, h + t + 0.05, 0]}>
-          <boxGeometry args={[channel.pushrod.rodWidth + 1.5, 0.1, channel.pushrod.rodWidth + 1.5]} />
-          <meshStandardMaterial color="#3a2d1c" />
-        </mesh>
-      ))}
+      {/* stage-interface markers: square guide slots for rods/posts, a round
+          bushing where a spinner spindle passes through */}
+      {channels.map(({ kind, channel }) => {
+        const size =
+          kind === 'lift' ? channel.pushrod.rodWidth + 1.5 : kind === 'tilt' ? 8 : 0
+        return kind === 'spin' ? (
+          <mesh key={channel.id} position={[channel.x, h + t + 0.05, 0]} rotation-x={Math.PI / 2}>
+            <torusGeometry args={[4.5, 1.2, 10, 28]} />
+            <meshStandardMaterial color="#3a2d1c" />
+          </mesh>
+        ) : (
+          <mesh key={channel.id} position={[channel.x, h + t + 0.05, 0]}>
+            <boxGeometry args={[size, 0.1, size]} />
+            <meshStandardMaterial color="#3a2d1c" />
+          </mesh>
+        )
+      })}
       {/* bearing rings where the shaft passes through the side panels */}
       {[-(w - t) / 2, (w - t) / 2].map((x) => (
         <mesh key={x} position={[x, shaft.shaftHeight, 0]} rotation-y={Math.PI / 2}>

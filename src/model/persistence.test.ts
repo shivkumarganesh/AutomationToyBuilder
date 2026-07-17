@@ -59,7 +59,7 @@ describe('share URL encoding', () => {
     expect(decoded).toEqual(snailWoodpecker)
     // and the decoded design is fully functional
     for (const signal of channelSignals(decoded)) {
-      expect(signal.table.lift).toBeGreaterThan(0)
+      if (signal.kind !== 'spin') expect(signal.table.lift).toBeGreaterThan(0)
     }
   })
 
