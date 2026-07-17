@@ -53,6 +53,7 @@ export interface DisplacementTable {
 export function displacementTable(
   cam: CamSpec,
   padWidth: number,
+  angularRate = 1,
   steps = 360,
   outlineSamples = 256,
 ): DisplacementTable {
@@ -62,7 +63,10 @@ export function displacementTable(
   let min = Infinity
   let max = -Infinity
   for (let i = 0; i < steps; i++) {
-    const theta = (i / steps) * TWO_PI + phase
+    // cam angle per crank angle: 1 on the crankshaft, −ratio on the
+    // counter-rotating layshaft. |rate| is an integer, so the table
+    // repeats exactly once per crank revolution.
+    const theta = angularRate * (i / steps) * TWO_PI + phase
     const h = followerHeight(outline, theta, padWidth / 2)
     heights[i] = h
     if (h < min) min = h

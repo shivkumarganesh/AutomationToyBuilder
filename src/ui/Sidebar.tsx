@@ -1,4 +1,5 @@
 import type { CamSpec } from '../model/types'
+import { gearRatio, layshaftY } from '../model/types'
 import { channelCount, MAX_CHANNELS, useDesignerStore } from '../model/store'
 import { NumberField } from './NumberField'
 import { ExportPanel } from './ExportPanel'
@@ -25,6 +26,7 @@ function convertCam(cam: CamSpec, kind: CamSpec['kind']): CamSpec {
 function CamControls({ cam, removable }: { cam: CamSpec; removable: boolean }) {
   const updateCam = useDesignerStore((s) => s.updateCam)
   const removeCam = useDesignerStore((s) => s.removeCam)
+  const hasGearTrain = useDesignerStore((s) => s.spec.mechanism.gearTrain !== undefined)
   const replaceCam = (next: CamSpec) => updateCam(cam.id, next)
   return (
     <>
@@ -39,6 +41,17 @@ function CamControls({ cam, removable }: { cam: CamSpec; removable: boolean }) {
           <option value="petal">Petal</option>
           <option value="snail">Snail</option>
         </select>
+        {hasGearTrain && (
+          <select
+            style={{ marginLeft: 6 }}
+            title="Which shaft carries this cam"
+            value={cam.shaft === 'lay' ? 'lay' : 'crank'}
+            onChange={(e) => updateCam(cam.id, { shaft: e.target.value as 'crank' | 'lay' })}
+          >
+            <option value="crank">Crankshaft</option>
+            <option value="lay">Layshaft</option>
+          </select>
+        )}
         {removable && (
           <button
             className="icon-btn"
@@ -151,6 +164,9 @@ export function Sidebar() {
   const updateSpinner = useDesignerStore((s) => s.updateSpinner)
   const addCharacter = useDesignerStore((s) => s.addCharacter)
   const removeCharacter = useDesignerStore((s) => s.removeCharacter)
+  const addGearTrain = useDesignerStore((s) => s.addGearTrain)
+  const updateGearTrain = useDesignerStore((s) => s.updateGearTrain)
+  const removeGearTrain = useDesignerStore((s) => s.removeGearTrain)
   const full = channelCount(spec) >= MAX_CHANNELS
 
   return (
@@ -265,6 +281,68 @@ export function Sidebar() {
               />
             </div>
           ))}
+          <div className="subhead">Gear train</div>
+          {spec.mechanism.gearTrain ? (
+            <>
+              <div className="subhead">
+                layshaft ×{gearRatio(spec.mechanism.gearTrain)} reverse · height{' '}
+                {layshaftY(spec.mechanism).toFixed(0)} mm
+                <button
+                  className="icon-btn"
+                  title="Remove the gear train; layshaft cams move to the crankshaft"
+                  onClick={removeGearTrain}
+                >
+                  ✕
+                </button>
+              </div>
+              <NumberField
+                label="Speed multiplier (drive teeth = k × driven)"
+                value={gearRatio(spec.mechanism.gearTrain)}
+                min={1}
+                max={3}
+                unit="×"
+                onChange={(v) =>
+                  updateGearTrain({
+                    teethDrive: Math.round(v) * spec.mechanism.gearTrain!.teethDriven,
+                  })
+                }
+              />
+              <NumberField
+                label="Driven gear teeth"
+                value={spec.mechanism.gearTrain.teethDriven}
+                min={8}
+                max={16}
+                unit=""
+                onChange={(v) =>
+                  updateGearTrain({
+                    teethDriven: Math.round(v),
+                    teethDrive:
+                      Math.round(v) * gearRatio(spec.mechanism.gearTrain!),
+                  })
+                }
+              />
+              <NumberField
+                label="Module (tooth size)"
+                value={spec.mechanism.gearTrain.module}
+                min={1}
+                max={2.5}
+                step={0.25}
+                onChange={(v) => updateGearTrain({ module: v })}
+              />
+              <NumberField
+                label="Position on shaft"
+                value={Math.round(spec.mechanism.gearTrain.position * 100)}
+                min={10}
+                max={90}
+                unit="%"
+                onChange={(v) => updateGearTrain({ position: v / 100 })}
+              />
+            </>
+          ) : (
+            <button onClick={addGearTrain} style={{ width: '100%', marginBottom: 6 }}>
+              + Add gear train (layshaft)
+            </button>
+          )}
           <div className="row" style={{ marginTop: 4 }}>
             <button onClick={addCam} disabled={full} style={{ flex: 1 }}>
               + Cam

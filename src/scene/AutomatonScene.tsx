@@ -8,6 +8,7 @@ import { FrameBox } from './FrameBox'
 import { Camshaft } from './mechanism/Camshaft'
 import { Crank } from './mechanism/Crank'
 import { Cam } from './mechanism/Cam'
+import { GearTrain } from './mechanism/GearTrain'
 import { Pushrod } from './mechanism/Pushrod'
 import { Rocker } from './mechanism/Rocker'
 import { Spinner } from './mechanism/Spinner'
@@ -35,6 +36,12 @@ export function AutomatonScene() {
       <group name="mechanism">
         <Camshaft />
         <Crank />
+        {spec.mechanism.gearTrain && (
+          <GearTrain
+            gear={spec.mechanism.gearTrain}
+            x={camWorldX(spec.frame, spec.mechanism.gearTrain.position)}
+          />
+        )}
         {spec.mechanism.cams.map((cam) => (
           <Cam key={cam.id} cam={cam} x={camWorldX(spec.frame, cam.position)} />
         ))}

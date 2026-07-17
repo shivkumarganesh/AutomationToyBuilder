@@ -229,8 +229,90 @@ export const nodAndSpin: AutomatonSpec = {
   },
 }
 
+/**
+ * Geared Hummingbird — the fourth toy, showing the gear train: a 2:1
+ * speed-up gear pair drives a layshaft carrying a small petal cam, so the
+ * bee flutters twelve times per crank turn while the flower bobs slowly
+ * on the crankshaft.
+ */
+export const gearedHummingbird: AutomatonSpec = {
+  name: 'Geared Hummingbird',
+  frame: {
+    width: 160,
+    depth: 80,
+    height: 110,
+    materialThickness: 3,
+  },
+  mechanism: {
+    shaftDiameter: 6,
+    shaftHeight: 60,
+    crank: {
+      armLength: 25,
+      handleLength: 30,
+      handleDiameter: 10,
+    },
+    gearTrain: { teethDrive: 24, teethDriven: 12, module: 1.5, position: 0.45 },
+    cams: [
+      {
+        id: 'cam-bob',
+        kind: 'eccentric',
+        radius: 18,
+        eccentricity: 7,
+        position: 0.22,
+        phaseDeg: 0,
+        thickness: 6,
+        shaft: 'crank',
+      },
+      {
+        id: 'cam-flutter',
+        kind: 'petal',
+        baseRadius: 12,
+        lift: 5,
+        lobes: 6,
+        position: 0.7,
+        phaseDeg: 0,
+        thickness: 6,
+        shaft: 'lay',
+      },
+    ],
+    pushrods: [
+      { id: 'rod-flower', camId: 'cam-bob', rodWidth: 6, padWidth: 22, length: 60 },
+      { id: 'rod-bee', camId: 'cam-flutter', rodWidth: 6, padWidth: 8, length: 92 },
+    ],
+    rockers: [],
+    spinners: [],
+  },
+  characters: [
+    {
+      id: 'figure-flower',
+      channelId: 'rod-flower',
+      kind: 'block',
+      width: 20,
+      height: 24,
+      depth: 16,
+      color: '#c94f8e',
+      label: 'Flower',
+    },
+    {
+      id: 'figure-bee',
+      channelId: 'rod-bee',
+      kind: 'block',
+      width: 14,
+      height: 16,
+      depth: 12,
+      color: '#e0b64f',
+      label: 'Bee',
+    },
+  ],
+  export: {
+    kerf: 0.1,
+    fdmClearance: 0.2,
+  },
+}
+
 export const templates: Record<string, AutomatonSpec> = {
   simplest: simplestAutomaton,
   woodpecker: snailWoodpecker,
   nodspin: nodAndSpin,
+  hummingbird: gearedHummingbird,
 }

@@ -1,5 +1,5 @@
 import type { AutomatonSpec, OutputChannel } from '../model/types'
-import { outputChannels } from '../model/types'
+import { camAngularRate, outputChannels } from '../model/types'
 import { displacementTable, sampleDisplacement, type DisplacementTable } from './follower'
 
 /**
@@ -34,13 +34,25 @@ export function channelSignals(spec: AutomatonSpec): ChannelSignal[] {
   return outputChannels(spec).map((channel): ChannelSignal => {
     switch (channel.kind) {
       case 'lift':
-        return { kind: 'lift', channel, table: displacementTable(channel.cam, channel.pushrod.padWidth) }
+        return {
+          kind: 'lift',
+          channel,
+          table: displacementTable(
+            channel.cam,
+            channel.pushrod.padWidth,
+            camAngularRate(spec.mechanism, channel.cam),
+          ),
+        }
       case 'tilt':
         return {
           kind: 'tilt',
           channel,
           table: tiltTable(
-            displacementTable(channel.cam, channel.rocker.padWidth),
+            displacementTable(
+              channel.cam,
+              channel.rocker.padWidth,
+              camAngularRate(spec.mechanism, channel.cam),
+            ),
             channel.rocker.leverLength,
           ),
         }

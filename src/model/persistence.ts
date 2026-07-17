@@ -1,4 +1,5 @@
-import type { AutomatonSpec, CamSpec } from './types'
+import type { AutomatonSpec, CamSpec, GearTrainSpec } from './types'
+import { layshaftY } from './types'
 import { simplestAutomaton } from './templates'
 
 /**
@@ -28,14 +29,20 @@ function str(v: unknown, name: string): string {
   return v
 }
 
-function parseCam(raw: unknown, i: number): CamSpec {
+function parseCam(raw: unknown, i: number, hasGearTrain: boolean): CamSpec {
   const c = raw as Record<string, unknown>
   if (typeof c !== 'object' || c === null) fail(`cam[${i}] must be an object`)
+  if (c.shaft !== undefined && c.shaft !== 'crank' && c.shaft !== 'lay')
+    fail(`cam[${i}].shaft unknown`)
+  if (c.shaft === 'lay' && !hasGearTrain)
+    fail(`cam[${i}] sits on the layshaft but the design has no gear train`)
   const base = {
     id: str(c.id, `cam[${i}].id`),
     position: num(c.position, `cam[${i}].position`, 0, 1),
     phaseDeg: num(c.phaseDeg, `cam[${i}].phaseDeg`, 0, 360),
     thickness: num(c.thickness, `cam[${i}].thickness`, 1, 30),
+    // only stamp the field when it carries information — keeps round-trips exact
+    ...(c.shaft !== undefined ? { shaft: c.shaft as 'crank' | 'lay' } : {}),
   }
   switch (c.kind) {
     case 'eccentric':
@@ -97,7 +104,22 @@ export function parseSpec(json: string): AutomatonSpec {
   const exp = o.export as Record<string, unknown>
   if (typeof exp !== 'object' || exp === null) fail('export settings missing')
 
-  const cams = mech.cams.map(parseCam)
+  // optional gear train — every mesh property is validated, not trusted
+  let gearTrain: GearTrainSpec | undefined
+  if (mech.gearTrain !== undefined && mech.gearTrain !== null) {
+    const g = mech.gearTrain as Record<string, unknown>
+    if (typeof g !== 'object') fail('gearTrain must be an object')
+    gearTrain = {
+      teethDrive: Math.round(num(g.teethDrive, 'gearTrain.teethDrive', 8, 80)),
+      teethDriven: Math.round(num(g.teethDriven, 'gearTrain.teethDriven', 8, 40)),
+      module: num(g.module, 'gearTrain.module', 1, 4),
+      position: num(g.position, 'gearTrain.position', 0, 1),
+    }
+    if (gearTrain.teethDrive % gearTrain.teethDriven !== 0)
+      fail('gearTrain ratio must be an integer (teethDrive divisible by teethDriven)')
+  }
+
+  const cams = mech.cams.map((raw, i) => parseCam(raw, i, gearTrain !== undefined))
   const camIds = new Set(cams.map((c) => c.id))
   if (camIds.size !== cams.length) fail('cam ids must be unique')
 
@@ -164,7 +186,7 @@ export function parseSpec(json: string): AutomatonSpec {
     return ch
   })
 
-  return {
+  const spec: AutomatonSpec = {
     name: str(o.name, 'name'),
     frame: {
       width: num(frame.width, 'frame.width', 50, 600),
@@ -180,6 +202,7 @@ export function parseSpec(json: string): AutomatonSpec {
         handleLength: num(crank.handleLength, 'crank.handleLength', 5, 100),
         handleDiameter: num(crank.handleDiameter, 'crank.handleDiameter', 3, 40),
       },
+      gearTrain,
       cams,
       pushrods,
       rockers,
@@ -191,6 +214,9 @@ export function parseSpec(json: string): AutomatonSpec {
       fdmClearance: num(exp.fdmClearance, 'export.fdmClearance', 0, 1),
     },
   }
+  if (spec.mechanism.gearTrain && layshaftY(spec.mechanism) < 8)
+    fail('gear train too large: the layshaft would sit below the box floor')
+  return spec
 }
 
 export function serializeSpec(spec: AutomatonSpec): string {

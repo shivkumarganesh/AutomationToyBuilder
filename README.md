@@ -63,7 +63,9 @@ src/
 Adding a toy = adding a template in `src/model/templates.ts` (plus, if it
 introduces a new mechanism, a profile function in `src/kinematics/`):
 
-- snail-cam "woodpecker" (profile already implemented and tested)
-- gear trains and 90° bevel transfer, Geneva drives for stepping motion
-- rotation/tilt output channels and articulated multi-joint characters
+- ~~snail-cam woodpecker~~, ~~rotation/tilt output channels~~, ~~spur gear
+  trains with a layshaft~~ — shipped as the Woodpecker, Nod & Spin Carousel,
+  and Geared Hummingbird templates
+- 90° bevel transfer, Geneva drives for stepping motion
+- articulated multi-joint characters
 - linkages for multi-directional trajectories

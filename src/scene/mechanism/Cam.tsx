@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { ExtrudeGeometry, Shape, type Group } from 'three'
 import type { CamSpec } from '../../model/types'
+import { camAngularRate, camShaftY } from '../../model/types'
 import { camOutline } from '../../kinematics/camProfile'
 import { useDesignerStore } from '../../model/store'
 
@@ -17,9 +18,11 @@ const CAM_COLORS: Record<CamSpec['kind'], string> = {
  * exactly what gets cut.
  */
 export function Cam({ cam, x }: { cam: CamSpec; x: number }) {
-  const shaftHeight = useDesignerStore((s) => s.spec.mechanism.shaftHeight)
+  const mech = useDesignerStore((s) => s.spec.mechanism)
   const group = useRef<Group>(null)
   const phase = (cam.phaseDeg * Math.PI) / 180
+  const shaftY = camShaftY(mech, cam)
+  const rate = camAngularRate(mech, cam)
 
   const geometry = useMemo(() => {
     const pts = camOutline(cam, 128)
@@ -34,11 +37,11 @@ export function Cam({ cam, x }: { cam: CamSpec; x: number }) {
 
   useFrame(() => {
     if (group.current)
-      group.current.rotation.x = useDesignerStore.getState().crankAngle + phase
+      group.current.rotation.x = rate * useDesignerStore.getState().crankAngle + phase
   })
 
   return (
-    <group position={[x, shaftHeight, 0]}>
+    <group position={[x, shaftY, 0]}>
       <group ref={group}>
         {/* rotation-y maps the profile plane onto world YZ so that a +X
             spin matches the kinematics' theta exactly */}
