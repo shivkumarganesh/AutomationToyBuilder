@@ -191,6 +191,43 @@ export interface GearTrainSpec {
   position: number
 }
 
+/**
+ * A crank-rocker four-bar linkage in the vertical plane at `position`:
+ * a short crank arm on the camshaft (input) drives a coupler whose far
+ * end rides a rocker swinging on a fixed post. The COUPLER POINT — the
+ * coupler extended past the rocker pin — traces a closed 2D curve, and
+ * a rigid wand on the coupler carries the figure up through an elongated
+ * stage slot. One linkage = one PATH output channel: 2D trajectory plus
+ * the coupler's pitch.
+ *
+ * Plane coordinates: u along the box depth (world Z), v vertical, origin
+ * at the shaft axis. The rocker's fixed pivot sits at (groundLen, 0) —
+ * one ground-link length along +Z from the shaft, same height.
+ *
+ * Grashof crank-rocker condition (the crank must rotate fully):
+ * crankRadius is the SHORTEST link and
+ * crankRadius + longest ≤ sum of the two remaining links.
+ */
+export interface LinkageSpec {
+  id: string
+  /** Position of the linkage plane along the shaft, fraction of interior width. */
+  position: number
+  /** Input crank radius r2 (shaft axis to crank pin A). */
+  crankRadius: number
+  /** Coupler length r3 (crank pin A to rocker pin B). */
+  couplerLen: number
+  /** Rocker length r4 (fixed pivot O4 to rocker pin B). */
+  rockerLen: number
+  /** Ground link g: O4 offset from the shaft axis along +Z, same height. */
+  groundLen: number
+  /** Coupler-point extension past B along the A→B line. */
+  couplerExt: number
+  /** Wand length from the coupler point up to the figure mount. */
+  wandLen: number
+  /** Phase of the crank pin on the shaft, degrees. */
+  phaseDeg: number
+}
+
 /** Everything below the stage plate. */
 export interface MechanismSpec {
   shaftDiameter: number
@@ -203,6 +240,8 @@ export interface MechanismSpec {
   pushrods: PushrodSpec[]
   rockers: RockerSpec[]
   spinners: SpinnerSpec[]
+  /** Four-bar linkages; absent on pre-linkage saves. */
+  linkages?: LinkageSpec[]
 }
 
 export type LimbKind = 'wings' | 'head' | 'tail'
@@ -276,6 +315,7 @@ export type OutputChannel =
   | { kind: 'lift'; id: string; x: number; cam: CamSpec; pushrod: PushrodSpec }
   | { kind: 'tilt'; id: string; x: number; cam: CamSpec; rocker: RockerSpec }
   | { kind: 'spin'; id: string; x: number; spinner: SpinnerSpec }
+  | { kind: 'path'; id: string; x: number; linkage: LinkageSpec }
 
 /** Interior width between the two side panels. */
 export function interiorWidth(frame: FrameSpec): number {
@@ -310,6 +350,14 @@ export function outputChannels(spec: AutomatonSpec): OutputChannel[] {
         id: spinner.id,
         spinner,
         x: camWorldX(spec.frame, spinner.position),
+      }),
+    ),
+    ...(spec.mechanism.linkages ?? []).map(
+      (linkage): OutputChannel => ({
+        kind: 'path',
+        id: linkage.id,
+        linkage,
+        x: camWorldX(spec.frame, linkage.position),
       }),
     ),
   ]

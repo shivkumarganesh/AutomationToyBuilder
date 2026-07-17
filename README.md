@@ -81,4 +81,8 @@ introduces a new mechanism, a profile function in `src/kinematics/`):
   figures with pivot-jointed wings/head/tail limbs, each driven by an output
   channel through a pin-and-wire linkage (`angle = asin(d / crankArm)`), with
   printable limb plates whose hole spacing IS the linkage geometry
-- linkages for multi-directional trajectories
+- ~~linkages for multi-directional trajectories~~ — shipped as the Soaring
+  Gull: a Grashof crank-rocker four-bar whose coupler point carries a wand
+  through an elongated stage slot (slot length derived from the wand's actual
+  crossing), giving figures a true 2D glide with pitch — the `path` output
+  channel

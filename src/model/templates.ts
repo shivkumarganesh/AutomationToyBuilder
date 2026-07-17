@@ -564,6 +564,88 @@ export const flappingBird: AutomatonSpec = {
   },
 }
 
+/**
+ * Soaring Gull — the eighth toy, introducing FOUR-BAR LINKAGES: a
+ * crank-rocker below the stage swoops a gull along a closed coupler
+ * curve, diving and climbing with real pitch, while a petal cam rolls a
+ * wave beneath it. The path channel is the first output that moves a
+ * figure in TWO directions at once.
+ */
+export const soaringGull: AutomatonSpec = {
+  name: 'Soaring Gull',
+  frame: {
+    width: 180,
+    depth: 100,
+    height: 110,
+    materialThickness: 3,
+  },
+  mechanism: {
+    shaftDiameter: 6,
+    shaftHeight: 45,
+    crank: {
+      armLength: 25,
+      handleLength: 30,
+      handleDiameter: 10,
+    },
+    cams: [
+      {
+        id: 'cam-wave',
+        kind: 'petal',
+        baseRadius: 15,
+        lift: 6,
+        lobes: 2,
+        position: 0.75,
+        phaseDeg: 0,
+        thickness: 6,
+      },
+    ],
+    pushrods: [
+      { id: 'rod-wave', camId: 'cam-wave', rodWidth: 6, padWidth: 20, length: 60 },
+    ],
+    rockers: [],
+    spinners: [],
+    linkages: [
+      {
+        id: 'link-glide',
+        position: 0.35,
+        crankRadius: 8,
+        couplerLen: 34,
+        rockerLen: 34,
+        groundLen: 36,
+        couplerExt: 8,
+        wandLen: 58,
+        phaseDeg: 0,
+      },
+    ],
+  },
+  characters: [
+    {
+      id: 'figure-gull',
+      channelId: 'link-glide',
+      kind: 'block',
+      width: 18,
+      height: 14,
+      depth: 26,
+      color: '#e6e9ee',
+      label: 'Gull',
+    },
+    {
+      id: 'figure-wave',
+      channelId: 'rod-wave',
+      kind: 'block',
+      width: 26,
+      height: 12,
+      depth: 18,
+      color: '#4fa9c9',
+      label: 'Wave',
+    },
+  ],
+  export: {
+    kerf: 0.1,
+    fdmClearance: 0.2,
+  },
+}
+
 export const templates: Record<string, AutomatonSpec> = {
   simplest: simplestAutomaton,
   woodpecker: snailWoodpecker,
@@ -572,4 +654,5 @@ export const templates: Record<string, AutomatonSpec> = {
   carousel: bevelCarousel,
   owl: steppingOwl,
   bird: flappingBird,
+  gull: soaringGull,
 }

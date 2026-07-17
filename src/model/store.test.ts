@@ -20,7 +20,8 @@ describe('addCam', () => {
     expect(spec.characters).toHaveLength(before.characters.length + 1)
     // the new unit is fully wired: channels resolve and produce motion
     for (const signal of channelSignals(spec)) {
-      if (signal.kind !== 'spin') expect(signal.table.lift).toBeGreaterThan(0)
+      if (signal.kind === 'lift' || signal.kind === 'tilt')
+        expect(signal.table.lift).toBeGreaterThan(0)
     }
   })
 
@@ -65,6 +66,19 @@ describe('addCam', () => {
     state().removeSpinner(spinner.id)
     expect(state().spec.mechanism.spinners).toHaveLength(0)
     expect(state().spec.characters.some((c) => c.channelId === spinner.id)).toBe(false)
+  })
+
+  it('addLinkage adds a path channel with a rider; removeLinkage cleans up', () => {
+    state().addLinkage()
+    const linkage = state().spec.mechanism.linkages![0]
+    expect(linkage).toBeDefined()
+    expect(state().spec.characters.some((c) => c.channelId === linkage.id)).toBe(true)
+    const signal = channelSignals(state().spec).find((s) => s.channel.id === linkage.id)!
+    expect(signal.kind).toBe('path')
+    if (signal.kind === 'path') expect(signal.table.valid).toBe(true)
+    state().removeLinkage(linkage.id)
+    expect(state().spec.mechanism.linkages).toHaveLength(0)
+    expect(state().spec.characters.some((c) => c.channelId === linkage.id)).toBe(false)
   })
 
   it('removing a cam also removes rockers it drives', () => {

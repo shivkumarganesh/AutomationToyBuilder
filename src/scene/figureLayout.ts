@@ -63,6 +63,9 @@ export function sourceTipRestY(spec: AutomatonSpec, signal: ChannelSignal): numb
       const lift = displacementTable(cam, rocker.padWidth, camAngularRate(mech, cam))
       return rockerPivotY(lift, camShaftY(mech, cam))
     }
+    case 'path':
+      // the wand's figure mount at mid vertical travel
+      return mech.shaftHeight + (signal.table.vMin + signal.table.vMax) / 2
     case 'spin':
       return null
   }

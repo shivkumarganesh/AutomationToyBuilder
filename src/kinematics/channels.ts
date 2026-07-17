@@ -2,6 +2,7 @@ import type { AutomatonSpec, OutputChannel } from '../model/types'
 import { camAngularRate, outputChannels, spinnerRatio } from '../model/types'
 import { genevaAngle } from '../scene/spinnerLayout'
 import { displacementTable, sampleDisplacement, type DisplacementTable } from './follower'
+import { pathTable, samplePath, type PathTable } from './linkage'
 
 /**
  * A resolved output channel plus its motion signal.
@@ -9,11 +10,13 @@ import { displacementTable, sampleDisplacement, type DisplacementTable } from '.
  *  - lift: table in mm (follower height relative to the shaft axis)
  *  - tilt: table in degrees (lever angle around its resting midpoint)
  *  - spin: no table — angle grows continuously at `ratio` revs per crank rev
+ *  - path: 2D mount trajectory (u along depth, v height) plus coupler pitch
  */
 export type ChannelSignal =
   | { kind: 'lift'; channel: OutputChannel & { kind: 'lift' }; table: DisplacementTable }
   | { kind: 'tilt'; channel: OutputChannel & { kind: 'tilt' }; table: DisplacementTable }
   | { kind: 'spin'; channel: OutputChannel & { kind: 'spin' }; ratio: number }
+  | { kind: 'path'; channel: OutputChannel & { kind: 'path' }; table: PathTable }
 
 /** Convert a follower lift table into lever tilt angles (degrees, ± around rest). */
 export function tiltTable(lift: DisplacementTable, leverLength: number): DisplacementTable {
@@ -59,19 +62,26 @@ export function channelSignals(spec: AutomatonSpec): ChannelSignal[] {
         }
       case 'spin':
         return { kind: 'spin', channel, ratio: spinnerRatio(channel.spinner) }
+      case 'path':
+        return { kind: 'path', channel, table: pathTable(channel.linkage) }
     }
   })
 }
 
 /**
  * Current value of a channel at crank angle theta (radians):
- * lift → mm, tilt → degrees, spin → unbounded degrees of rotation.
+ * lift → mm, tilt → degrees, spin → unbounded degrees of rotation,
+ * path → vertical mount travel in mm about its mean.
  */
 export function channelValue(signal: ChannelSignal, theta: number): number {
   if (signal.kind === 'spin') {
     const spinner = signal.channel.spinner
     if (spinner.drive === 'geneva') return (genevaAngle(spinner, theta) * 180) / Math.PI
     return ((theta * 180) / Math.PI) * signal.ratio
+  }
+  if (signal.kind === 'path') {
+    const { v } = samplePath(signal.table, theta)
+    return v - (signal.table.vMin + signal.table.vMax) / 2
   }
   return sampleDisplacement(signal.table, theta)
 }

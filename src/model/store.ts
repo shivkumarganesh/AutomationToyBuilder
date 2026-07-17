@@ -7,6 +7,7 @@ import type {
   FrameSpec,
   GearTrainSpec,
   LimbSpec,
+  LinkageSpec,
   MechanismSpec,
   PushrodSpec,
   RockerSpec,
@@ -51,6 +52,10 @@ interface DesignerState {
   addRocker: () => void
   /** Add a complete spin unit: friction wheel + spindle + figure on the platform. */
   addSpinner: () => void
+  /** Add a complete path unit: four-bar linkage + figure riding the wand. */
+  addLinkage: () => void
+  updateLinkage: (id: string, patch: Partial<LinkageSpec>) => void
+  removeLinkage: (id: string) => void
   /** Remove a cam with its pushrods/rockers and any characters on those channels. */
   removeCam: (id: string) => void
   removeSpinner: (id: string) => void
@@ -78,7 +83,7 @@ export const MIN_CHANNELS = 1
 
 export function channelCount(spec: AutomatonSpec): number {
   const m = spec.mechanism
-  return m.pushrods.length + m.rockers.length + m.spinners.length
+  return m.pushrods.length + m.rockers.length + m.spinners.length + (m.linkages?.length ?? 0)
 }
 
 /** Next free numeric suffix across all mechanism/character ids. */
@@ -88,6 +93,7 @@ function nextIndex(spec: AutomatonSpec): number {
     ...spec.mechanism.pushrods.map((r) => r.id),
     ...spec.mechanism.rockers.map((r) => r.id),
     ...spec.mechanism.spinners.map((r) => r.id),
+    ...(spec.mechanism.linkages ?? []).map((l) => l.id),
     ...spec.characters.map((c) => c.id),
     ...spec.characters.flatMap((c) => (c.limbs ?? []).map((l) => l.id)),
   ]
@@ -104,6 +110,7 @@ function freeShaftPosition(spec: AutomatonSpec): number {
   const used = [
     ...spec.mechanism.cams.map((c) => c.position),
     ...spec.mechanism.spinners.map((sp) => sp.position),
+    ...(spec.mechanism.linkages ?? []).map((l) => l.position),
   ].sort((a, b) => a - b)
   const bounds = [0.08, ...used, 0.92]
   let bestGap = 0
@@ -376,6 +383,73 @@ export const useDesignerStore = create<DesignerState>((set) => ({
           mechanism: {
             ...s.spec.mechanism,
             spinners: s.spec.mechanism.spinners.filter((sp) => sp.id !== id),
+          },
+          characters: pruneCharacters(s.spec.characters, [id]),
+        },
+      }
+    }),
+
+  addLinkage: () =>
+    set((s) => {
+      if (channelCount(s.spec) >= MAX_CHANNELS) return {}
+      const n = nextIndex(s.spec)
+      const linkageId = `link-${n}`
+      // default Grashof crank-rocker with comfortable margins
+      const linkage: LinkageSpec = {
+        id: linkageId,
+        position: freeShaftPosition(s.spec),
+        crankRadius: 10,
+        couplerLen: 40,
+        rockerLen: 32,
+        groundLen: 34,
+        couplerExt: 14,
+        wandLen: 78,
+        phaseDeg: 0,
+      }
+      const figure: CharacterSpec = {
+        id: `figure-${n}`,
+        channelId: linkageId,
+        kind: 'block',
+        width: 16,
+        height: 20,
+        depth: 14,
+        color: FIGURE_COLORS[(n - 1) % FIGURE_COLORS.length],
+        label: `Swooper ${n}`,
+      }
+      return {
+        spec: {
+          ...s.spec,
+          mechanism: {
+            ...s.spec.mechanism,
+            linkages: [...(s.spec.mechanism.linkages ?? []), linkage],
+          },
+          characters: [...s.spec.characters, figure],
+        },
+      }
+    }),
+
+  updateLinkage: (id, patch) =>
+    set((s) => ({
+      spec: {
+        ...s.spec,
+        mechanism: {
+          ...s.spec.mechanism,
+          linkages: (s.spec.mechanism.linkages ?? []).map((l) =>
+            l.id === id ? { ...l, ...patch } : l,
+          ),
+        },
+      },
+    })),
+
+  removeLinkage: (id) =>
+    set((s) => {
+      if (channelCount(s.spec) <= MIN_CHANNELS) return {}
+      return {
+        spec: {
+          ...s.spec,
+          mechanism: {
+            ...s.spec.mechanism,
+            linkages: (s.spec.mechanism.linkages ?? []).filter((l) => l.id !== id),
           },
           characters: pruneCharacters(s.spec.characters, [id]),
         },

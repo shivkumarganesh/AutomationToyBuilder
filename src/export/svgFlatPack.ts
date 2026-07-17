@@ -12,6 +12,11 @@ import {
   genevaWheelOutline,
 } from '../scene/spinnerLayout'
 import {
+  couplerPlateOutline,
+  LINK_PIN_DIAMETER,
+  wandPlaneCrossing,
+} from '../kinematics/linkage'
+import {
   HINGE_HEIGHT,
   LIMB_AXLE_DIAMETER,
   LIMB_PIN_DIAMETER,
@@ -268,6 +273,16 @@ export function generateParts(spec: AutomatonSpec): Part[] {
       } else if (ch.kind === 'tilt') {
         const size = 6 + 2 * GUIDE_CLEARANCE - kerf
         holes.push(rect(ch.x + w / 2, d / 2, size, size))
+      } else if (ch.kind === 'path') {
+        // elongated slot spanning exactly the wand's travel where it
+        // pierces the stage sheet — DERIVED from the coupler curve
+        const planeV = spec.frame.height + t / 2 - spec.mechanism.shaftHeight
+        const cross = wandPlaneCrossing(ch.linkage, planeV)
+        const slotLen = cross.max - cross.min + 3 + 2 * GUIDE_CLEARANCE - kerf
+        const slotWide = 3 + 2 * GUIDE_CLEARANCE - kerf
+        holes.push(
+          rect(ch.x + w / 2, d / 2 + (cross.min + cross.max) / 2, slotWide, slotLen),
+        )
       } else {
         holes.push(circle(ch.x + w / 2, d / 2, (6 + 2 * GUIDE_CLEARANCE - kerf) / 2))
       }
@@ -498,6 +513,63 @@ export function generateParts(spec: AutomatonSpec): Part[] {
       const linkLen = stageTop + 6 - pivotY
       if (linkLen > 0) parts.push(stripPart(`rocker-link-${rocker.id}`, 4, linkLen))
     }
+  }
+
+  // Four-bar linkage parts: input crank disc, the coupler+wand L-plate
+  // (arm angle derived so the wand is vertical at mid-swing), the rocker
+  // bar, and the pivot post at derived height.
+  for (const l of mech.linkages ?? []) {
+    const crankR = l.crankRadius + 5
+    const disc = growRadially(circle(0, 0, crankR, 48), kerf / 2)
+    const db = bounds(disc)
+    parts.push({
+      name: `linkage-crank-${l.id}`,
+      outline: translate(disc, -db.minX, -db.minY),
+      holes: [
+        translate(dHolePath(mech.shaftDiameter - kerf, 0, 0), -db.minX, -db.minY),
+        translate(circle(l.crankRadius, 0, (LINK_PIN_DIAMETER - kerf) / 2), -db.minX, -db.minY),
+      ],
+      width: db.maxX - db.minX,
+      height: db.maxY - db.minY,
+    })
+
+    const plate = growRadially(couplerPlateOutline(l), kerf / 2)
+    const pb = bounds(plate)
+    parts.push({
+      name: `linkage-coupler-${l.id}`,
+      outline: translate(plate, -pb.minX, -pb.minY),
+      holes: [
+        translate(circle(0, 0, runningHole(LINK_PIN_DIAMETER, kerf)), -pb.minX, -pb.minY),
+        translate(
+          circle(l.couplerLen, 0, runningHole(LINK_PIN_DIAMETER, kerf)),
+          -pb.minX,
+          -pb.minY,
+        ),
+      ],
+      width: pb.maxX - pb.minX,
+      height: pb.maxY - pb.minY,
+    })
+
+    const rockerLen = l.rockerLen
+    parts.push({
+      name: `linkage-rocker-${l.id}`,
+      outline: [
+        { x: -5, y: -4 },
+        { x: rockerLen + 5, y: -4 },
+        { x: rockerLen + 5, y: 4 },
+        { x: -5, y: 4 },
+      ].map((pt) => ({ x: pt.x + 5, y: pt.y + 4 })),
+      holes: [
+        circle(5, 4, runningHole(LINK_PIN_DIAMETER, kerf)),
+        circle(rockerLen + 5, 4, runningHole(LINK_PIN_DIAMETER, kerf)),
+      ],
+      width: rockerLen + 10,
+      height: 8,
+    })
+
+    const post = stripPart(`linkage-post-${l.id}`, 6, mech.shaftHeight)
+    post.holes.push(circle(3, mech.shaftHeight - 4, runningHole(LINK_PIN_DIAMETER, kerf)))
+    parts.push(post)
   }
 
   // Character-zone parts: every figure gets flat laser parts too, so a

@@ -12,6 +12,7 @@ import { GearTrain } from './mechanism/GearTrain'
 import { Pushrod } from './mechanism/Pushrod'
 import { Rocker } from './mechanism/Rocker'
 import { Spinner } from './mechanism/Spinner'
+import { Linkage } from './mechanism/Linkage'
 import { FigureBlock } from './character/FigureBlock'
 import { ArticulatedFigure } from './character/ArticulatedFigure'
 
@@ -54,6 +55,8 @@ export function AutomatonScene() {
               return <Rocker key={signal.channel.id} signal={signal} />
             case 'spin':
               return <Spinner key={signal.channel.id} signal={signal} />
+            case 'path':
+              return <Linkage key={signal.channel.id} signal={signal} />
           }
         })}
       </group>

@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useDesignerStore } from '../model/store'
 import { useChannels } from '../scene/useChannels'
 import { channelValue, type ChannelSignal } from '../kinematics/channels'
+import { samplePath } from '../kinematics/linkage'
 
 /** Validated categorical slots (dark surface #1a1f27) in fixed order. */
 const SERIES_COLORS = ['#3987e5', '#008300', '#d55181', '#c98500']
@@ -20,6 +21,8 @@ interface Series {
   signal: ChannelSignal
   /** plotted value at theta (lift is re-based to 0 at its lowest point) */
   value: (theta: number) => number
+  /** dashed stroke (the horizontal component of a path channel) */
+  dash?: boolean
 }
 
 interface Panel {
@@ -57,7 +60,9 @@ export function DisplacementChart() {
           ? signal.channel.spinner.drive === 'geneva'
             ? `${signal.channel.id} · geneva ${signal.channel.spinner.stations} steps`
             : `${signal.channel.id} · spin ×${signal.ratio}`
-          : `${signal.channel.id} · ${signal.channel.cam.kind}`,
+          : signal.kind === 'path'
+            ? `${signal.channel.id} · path ↕`
+            : `${signal.channel.id} · ${signal.channel.cam.kind}`,
       color,
       signal,
       value: (theta) =>
@@ -67,6 +72,31 @@ export function DisplacementChart() {
     })
 
     const lift = withColors.filter((s) => s.signal.kind === 'lift').map(makeSeries)
+    // a path channel plots two mm series in one color: vertical travel
+    // (solid) and horizontal travel (dashed), both re-based to 0
+    const paths = withColors
+      .filter((s) => s.signal.kind === 'path')
+      .flatMap(({ signal, color }): Series[] => {
+        if (signal.kind !== 'path') return []
+        const t = signal.table
+        return [
+          {
+            id: `${signal.channel.id}-v`,
+            label: `${signal.channel.id} · path ↕`,
+            color,
+            signal,
+            value: (theta) => samplePath(t, theta).v - t.vMin,
+          },
+          {
+            id: `${signal.channel.id}-u`,
+            label: `${signal.channel.id} · path ↔`,
+            color,
+            signal,
+            dash: true,
+            value: (theta) => samplePath(t, theta).u - t.uMin,
+          },
+        ]
+      })
     const tilt = withColors.filter((s) => s.signal.kind === 'tilt').map(makeSeries)
     // geneva steps are bounded within a revolution (0 → 360/N) — chartable
     // in the degrees panel; continuous spins stay legend-only
@@ -82,9 +112,21 @@ export function DisplacementChart() {
       .map(makeSeries)
 
     const defs: { unit: string; series: Series[]; min: number; max: number }[] = []
-    if (lift.length) {
-      const max = Math.max(4, ...lift.map((s) => (s.signal.kind === 'lift' ? s.signal.table.lift : 0)))
-      defs.push({ unit: 'mm', series: lift, min: 0, max })
+    const mmSeries = [...lift, ...paths]
+    if (mmSeries.length) {
+      const max = Math.max(
+        4,
+        ...lift.map((s) => (s.signal.kind === 'lift' ? s.signal.table.lift : 0)),
+        ...paths.map((s) =>
+          s.signal.kind === 'path'
+            ? Math.max(
+                s.signal.table.vMax - s.signal.table.vMin,
+                s.signal.table.uMax - s.signal.table.uMin,
+              )
+            : 0,
+        ),
+      )
+      defs.push({ unit: 'mm', series: mmSeries, min: 0, max })
     }
     const degSeries = [...tilt, ...genevaSpins]
     if (degSeries.length) {
@@ -159,7 +201,16 @@ export function DisplacementChart() {
                 const v = s.value((deg * Math.PI) / 180)
                 pts.push(`${deg === 0 ? 'M' : 'L'}${x(deg).toFixed(1)},${y(v).toFixed(1)}`)
               }
-              return <path key={s.id} d={pts.join(' ')} fill="none" stroke={s.color} strokeWidth={2} />
+              return (
+                <path
+                  key={s.id}
+                  d={pts.join(' ')}
+                  fill="none"
+                  stroke={s.color}
+                  strokeWidth={2}
+                  strokeDasharray={s.dash ? '5 4' : undefined}
+                />
+              )
             })}
           </g>
         )

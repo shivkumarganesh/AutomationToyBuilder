@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bevelCarousel, flappingBird, nodAndSpin, simplestAutomaton } from '../model/templates'
+import { bevelCarousel, flappingBird, nodAndSpin, simplestAutomaton, soaringGull } from '../model/templates'
 import { crownPitchRadius } from '../scene/spinnerLayout'
 import { camWorldX, outputChannels } from '../model/types'
 import { channelSignals } from '../kinematics/channels'
@@ -284,6 +284,51 @@ describe('rocker hardware export', () => {
     const stageTop = nodAndSpin.frame.height + nodAndSpin.frame.materialThickness
     // post + link together must reach from the floor to above the stage
     expect(post.height + link.height).toBeCloseTo(stageTop + 6, 3)
+  })
+})
+
+describe('linkage export parts', () => {
+  const linkage = soaringGull.mechanism.linkages![0]
+
+  it('STL ships the full linkage kit', () => {
+    const names = buildPrintParts(soaringGull).map((p) => p.name)
+    for (const part of [
+      `linkage-crank-${linkage.id}`,
+      `linkage-coupler-${linkage.id}`,
+      `linkage-rocker-${linkage.id}`,
+      `linkage-post-${linkage.id}`,
+      `linkage-pin-${linkage.id}-a`,
+      `linkage-pin-${linkage.id}-b`,
+      `linkage-pin-${linkage.id}-o4`,
+    ]) {
+      expect(names, part).toContain(part)
+    }
+  })
+
+  it('SVG cuts crank disc, coupler+wand plate, rocker, and post', () => {
+    const parts = generateParts(soaringGull)
+    const coupler = parts.find((p) => p.name === `linkage-coupler-${linkage.id}`)!
+    expect(coupler).toBeDefined()
+    expect(coupler.holes).toHaveLength(2)
+    // the plate spans bar + wand: taller than the bar alone
+    expect(coupler.height).toBeGreaterThan(linkage.wandLen * 0.5)
+    expect(parts.some((p) => p.name === `linkage-crank-${linkage.id}`)).toBe(true)
+    expect(parts.some((p) => p.name === `linkage-rocker-${linkage.id}`)).toBe(true)
+    const post = parts.find((p) => p.name === `linkage-post-${linkage.id}`)!
+    expect(post.height).toBeCloseTo(soaringGull.mechanism.shaftHeight, 3)
+  })
+
+  it('the stage carries an elongated derived slot for the wand', () => {
+    const parts = generateParts(soaringGull)
+    const stage = parts.find((p) => p.name === 'stage')!
+    const slot = stage.holes.find((hole) => {
+      const ys = hole.map((pt) => pt.y)
+      const xs = hole.map((pt) => pt.x)
+      return (
+        Math.max(...ys) - Math.min(...ys) > 15 && Math.max(...xs) - Math.min(...xs) < 6
+      )
+    })
+    expect(slot, 'elongated wand slot').toBeDefined()
   })
 })
 

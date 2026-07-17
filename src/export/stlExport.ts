@@ -9,6 +9,7 @@ import { displacementTable } from '../kinematics/follower'
 import type { ChannelSignal } from '../kinematics/channels'
 import { channelSignals } from '../kinematics/channels'
 import { rockerPivotY } from '../scene/rockerLayout'
+import { couplerPlateOutline, LINK_PIN_DIAMETER } from '../kinematics/linkage'
 import {
   bodyBaseY,
   HINGE_HEIGHT,
@@ -302,6 +303,62 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
     platform.rotateX(Math.PI / 2)
     place(platform, 0, 0, spindleLength - 2)
     parts.push({ name: `spinner-spindle-${sp.id}`, geometry: merge([rod, driven, platform]) })
+  }
+
+  // Four-bar linkage parts: crank disc with pin, coupler+wand L-plate,
+  // rocker bar, pivot post, and the three revolute pins.
+  for (const l of mech.linkages ?? []) {
+    const crankR = l.crankRadius + 5
+    const crankShape = new Shape()
+    crankShape.absarc(0, 0, crankR, 0, Math.PI * 2, false)
+    crankShape.holes.push(dHole(shaftR + clearance))
+    const pinHole = new Shape()
+    pinHole.absarc(l.crankRadius, 0, LINK_PIN_DIAMETER / 2 + clearance, 0, Math.PI * 2, true)
+    crankShape.holes.push(pinHole)
+    parts.push({
+      name: `linkage-crank-${l.id}`,
+      geometry: new ExtrudeGeometry(crankShape, { depth: 4, bevelEnabled: false }),
+    })
+
+    const pts = couplerPlateOutline(l)
+    const plate = new Shape()
+    plate.moveTo(pts[0].x, pts[0].y)
+    for (let i = 1; i < pts.length; i++) plate.lineTo(pts[i].x, pts[i].y)
+    plate.closePath()
+    for (const hx of [0, l.couplerLen]) {
+      const hole = new Shape()
+      hole.absarc(hx, 0, LINK_PIN_DIAMETER / 2 + clearance, 0, Math.PI * 2, true)
+      plate.holes.push(hole)
+    }
+    parts.push({
+      name: `linkage-coupler-${l.id}`,
+      geometry: new ExtrudeGeometry(plate, { depth: 3, bevelEnabled: false }),
+    })
+
+    const rocker = new Shape()
+    rocker.moveTo(-5, -4)
+    rocker.lineTo(l.rockerLen + 5, -4)
+    rocker.lineTo(l.rockerLen + 5, 4)
+    rocker.lineTo(-5, 4)
+    rocker.closePath()
+    for (const hx of [0, l.rockerLen]) {
+      const hole = new Shape()
+      hole.absarc(hx, 0, LINK_PIN_DIAMETER / 2 + clearance, 0, Math.PI * 2, true)
+      rocker.holes.push(hole)
+    }
+    parts.push({
+      name: `linkage-rocker-${l.id}`,
+      geometry: new ExtrudeGeometry(rocker, { depth: 3, bevelEnabled: false }),
+    })
+
+    parts.push({
+      name: `linkage-post-${l.id}`,
+      geometry: new BoxGeometry(6, 6, mech.shaftHeight),
+    })
+    for (const pin of ['a', 'b', 'o4']) {
+      const geo = new CylinderGeometry(LINK_PIN_DIAMETER / 2, LINK_PIN_DIAMETER / 2, 14, 16)
+      parts.push({ name: `linkage-pin-${l.id}-${pin}`, geometry: geo })
+    }
   }
 
   // Character figures, printed upright.

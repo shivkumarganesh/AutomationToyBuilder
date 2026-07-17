@@ -1,4 +1,11 @@
-import type { AutomatonSpec, CamSpec, CharacterSpec, GearTrainSpec, LimbSpec } from './types'
+import type {
+  AutomatonSpec,
+  CamSpec,
+  CharacterSpec,
+  GearTrainSpec,
+  LimbSpec,
+  LinkageSpec,
+} from './types'
 import { layshaftY } from './types'
 import { simplestAutomaton } from './templates'
 
@@ -183,12 +190,32 @@ export function parseSpec(json: string): AutomatonSpec {
     }
   })
 
+  // four-bar linkages were added after v1 — older saves simply omit them
+  const rawLinkages = mech.linkages === undefined ? [] : mech.linkages
+  if (!Array.isArray(rawLinkages)) fail('mechanism.linkages must be an array')
+  const linkages = rawLinkages.map((raw, i): LinkageSpec => {
+    const l = raw as Record<string, unknown>
+    if (typeof l !== 'object' || l === null) fail(`linkage[${i}] must be an object`)
+    return {
+      id: str(l.id, `linkage[${i}].id`),
+      position: num(l.position, `linkage[${i}].position`, 0, 1),
+      crankRadius: num(l.crankRadius, `linkage[${i}].crankRadius`, 4, 30),
+      couplerLen: num(l.couplerLen, `linkage[${i}].couplerLen`, 10, 120),
+      rockerLen: num(l.rockerLen, `linkage[${i}].rockerLen`, 10, 120),
+      groundLen: num(l.groundLen, `linkage[${i}].groundLen`, 10, 120),
+      couplerExt: num(l.couplerExt, `linkage[${i}].couplerExt`, 0, 60),
+      wandLen: num(l.wandLen, `linkage[${i}].wandLen`, 10, 200),
+      phaseDeg: num(l.phaseDeg, `linkage[${i}].phaseDeg`, 0, 360),
+    }
+  })
+
   const rodIds = new Set([
     ...pushrods.map((r) => r.id),
     ...rockers.map((r) => r.id),
     ...spinners.map((sp) => sp.id),
+    ...linkages.map((l) => l.id),
   ])
-  if (rodIds.size !== pushrods.length + rockers.length + spinners.length)
+  if (rodIds.size !== pushrods.length + rockers.length + spinners.length + linkages.length)
     fail('output channel ids must be unique')
 
   const characters = o.characters.map((raw, i): CharacterSpec => {
@@ -255,6 +282,8 @@ export function parseSpec(json: string): AutomatonSpec {
       pushrods,
       rockers,
       spinners,
+      // only stamp the field when the save carried it — keeps round-trips exact
+      ...(mech.linkages !== undefined ? { linkages } : {}),
     },
     characters,
     export: {
