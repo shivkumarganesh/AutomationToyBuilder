@@ -160,6 +160,15 @@ export function parseSpec(json: string): AutomatonSpec {
       platformRadius: num(sp.platformRadius, `spinner[${i}].platformRadius`, 5, 120),
     }
     if (sp.drive === undefined || sp.drive === 'friction') return base
+    if (sp.drive === 'geneva') {
+      if (base.wheelRadius < 8)
+        fail(`spinner[${i}]: geneva pin circle radius must be at least 8`)
+      return {
+        ...base,
+        drive: 'geneva' as const,
+        stations: Math.round(num(sp.stations, `spinner[${i}].stations`, 3, 12)),
+      }
+    }
     if (sp.drive !== 'bevel') fail(`spinner[${i}].drive unknown`)
     const crownTeeth = Math.round(num(sp.crownTeeth, `spinner[${i}].crownTeeth`, 8, 48))
     const pinionTeeth = Math.round(num(sp.pinionTeeth, `spinner[${i}].pinionTeeth`, 6, 24))

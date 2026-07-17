@@ -3,7 +3,11 @@ import { outputChannels } from '../model/types'
 import { layshaftY } from '../model/types'
 import { camOutline, type Point2 } from '../kinematics/camProfile'
 import { gearOutline } from '../kinematics/gearProfile'
-import { CROWN_TOOTH_LENGTH, crownPitchRadius } from '../scene/spinnerLayout'
+import {
+  CROWN_TOOTH_LENGTH,
+  crownPitchRadius,
+  genevaWheelOutline,
+} from '../scene/spinnerLayout'
 
 /**
  * Laser-cut flat-pack layout of the frame (the zone boundary) and the cams.
@@ -320,6 +324,56 @@ export function generateParts(spec: AutomatonSpec): Part[] {
   //    (crown teeth point out of the sheet plane, so no single flat part
   //    can carry them)
   for (const sp of mech.spinners) {
+    if (sp.drive === 'geneva') {
+      // star wheel: flat and directly cuttable, spindle hole in the centre
+      const wheel = genevaWheelOutline(sp)
+      const wb = bounds(wheel)
+      parts.push({
+        name: `geneva-wheel-${sp.id}`,
+        outline: translate(wheel, -wb.minX, -wb.minY),
+        holes: [translate(circle(0, 0, (6 - kerf) / 2), -wb.minX, -wb.minY)],
+        width: wb.maxX - wb.minX,
+        height: wb.maxY - wb.minY,
+      })
+      // driver disc: D-hole + a mortise for the pin tab near the rim
+      const Rd = sp.wheelRadius - 6
+      const disc = growRadially(circle(0, 0, Rd, 64), kerf / 2)
+      const db = bounds(disc)
+      parts.push({
+        name: `geneva-driver-${sp.id}`,
+        outline: translate(disc, -db.minX, -db.minY),
+        holes: [
+          translate(dHolePath(mech.shaftDiameter - kerf, 0, 0), -db.minX, -db.minY),
+          translate(rect(Rd - 4, 0, 4 - kerf, t - kerf), -db.minX, -db.minY),
+        ],
+        width: db.maxX - db.minX,
+        height: db.maxY - db.minY,
+      })
+      // pin tab: glues through the driver mortise, reaches the pin circle radius
+      parts.push({
+        name: `geneva-pin-${sp.id}`,
+        outline: [
+          { x: 0, y: 0 },
+          { x: 12 + t, y: 0 },
+          { x: 12 + t, y: 4 + kerf },
+          { x: 0, y: 4 + kerf },
+        ],
+        holes: [],
+        width: 12 + t,
+        height: 4 + kerf,
+      })
+      // platform disc
+      const platform = growRadially(circle(0, 0, sp.platformRadius, 72), kerf / 2)
+      const b2 = bounds(platform)
+      parts.push({
+        name: `spinner-platform-${sp.id}`,
+        outline: translate(platform, -b2.minX, -b2.minY),
+        holes: [translate(circle(0, 0, (6 - kerf) / 2), -b2.minX, -b2.minY)],
+        width: b2.maxX - b2.minX,
+        height: b2.maxY - b2.minY,
+      })
+      continue
+    }
     if (sp.drive === 'bevel') {
       // pinion: a plain flat spur gear with a spindle hole
       const pinion = growRadially(gearOutline(sp.pinionTeeth!, sp.module!), kerf / 2)

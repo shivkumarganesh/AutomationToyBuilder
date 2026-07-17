@@ -8,7 +8,7 @@ export function CrankControls() {
   const seeThrough = useDesignerStore((s) => s.seeThrough)
   const { setCranking, setCrankSpeed, setCrankAngle, setSeeThrough } = useDesignerStore()
 
-  const deg = Math.round((crankAngle * 180) / Math.PI)
+  const deg = Math.round((crankAngle * 180) / Math.PI) % 360
 
   return (
     <div className="crank-controls">

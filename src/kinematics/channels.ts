@@ -1,5 +1,6 @@
 import type { AutomatonSpec, OutputChannel } from '../model/types'
 import { camAngularRate, outputChannels, spinnerRatio } from '../model/types'
+import { genevaAngle } from '../scene/spinnerLayout'
 import { displacementTable, sampleDisplacement, type DisplacementTable } from './follower'
 
 /**
@@ -67,6 +68,10 @@ export function channelSignals(spec: AutomatonSpec): ChannelSignal[] {
  * lift → mm, tilt → degrees, spin → unbounded degrees of rotation.
  */
 export function channelValue(signal: ChannelSignal, theta: number): number {
-  if (signal.kind === 'spin') return (theta * 180) / Math.PI * signal.ratio
+  if (signal.kind === 'spin') {
+    const spinner = signal.channel.spinner
+    if (spinner.drive === 'geneva') return (genevaAngle(spinner, theta) * 180) / Math.PI
+    return ((theta * 180) / Math.PI) * signal.ratio
+  }
   return sampleDisplacement(signal.table, theta)
 }
