@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { simplestAutomaton } from '../model/templates'
+import { bevelCarousel, simplestAutomaton } from '../model/templates'
+import { crownPitchRadius } from '../scene/spinnerLayout'
 import { camWorldX, outputChannels } from '../model/types'
 import { flatPackSvg, generateParts } from './svgFlatPack'
 import { buildPrintParts, exportStl } from './stlExport'
@@ -152,5 +153,59 @@ describe('STL export', () => {
     const triangles = view.getUint32(80, true)
     expect(triangles).toBeGreaterThan(100)
     expect(data.byteLength).toBe(84 + triangles * 50)
+  })
+})
+
+describe('bevel spinner laser parts', () => {
+  const parts = generateParts(bevelCarousel)
+  const spinner = bevelCarousel.mechanism.spinners[0]
+  const kerf = bevelCarousel.export.kerf
+  const t = bevelCarousel.frame.materialThickness
+
+  it('exports a toothed pinion, never a plain circle', () => {
+    const pinion = parts.find((p) => p.name === `pinion-${spinner.id}`)!
+    expect(pinion).toBeDefined()
+    // 4 outline points per tooth — a circle would have a uniform radius
+    expect(pinion.outline).toHaveLength(spinner.pinionTeeth! * 4)
+    const radii = pinion.outline.map((p) =>
+      Math.hypot(p.x - pinion.width / 2, p.y - pinion.height / 2),
+    )
+    expect(Math.max(...radii) - Math.min(...radii)).toBeGreaterThan(2)
+  })
+
+  it('exports the crown as a slotted disc plus one tooth tab per tooth', () => {
+    const disc = parts.find((p) => p.name === `crown-disc-${spinner.id}`)!
+    expect(disc).toBeDefined()
+    // D-hole + one mortise per tooth
+    expect(disc.holes).toHaveLength(1 + spinner.crownTeeth!)
+    const tabs = parts.filter((p) => p.name.startsWith(`crown-tooth-${spinner.id}-`))
+    expect(tabs).toHaveLength(spinner.crownTeeth!)
+  })
+
+  it('tooth tabs friction-fit the mortises: kerf-complementary widths', () => {
+    const disc = parts.find((p) => p.name === `crown-disc-${spinner.id}`)!
+    const tab = parts.find((p) => p.name === `crown-tooth-${spinner.id}-1`)!
+    // mortise short side (drawn t − kerf) vs tab short side (drawn toothW + kerf):
+    // after the cut both land on nominal, giving a snug fit
+    const mortise = disc.holes[1]
+    const xs = mortise.map((p) => p.x)
+    const ys = mortise.map((p) => p.y)
+    const mortiseDims = [
+      Math.max(...xs) - Math.min(...xs),
+      Math.max(...ys) - Math.min(...ys),
+    ].sort((a, b) => a - b)
+    const Rc = crownPitchRadius(spinner)
+    const toothW = ((2 * Math.PI * Rc) / spinner.crownTeeth!) * 0.45
+    // mortise drawn undersize: after the cut, one dim = sheet thickness t
+    // (the tab passes through the sheet) and the other = tooth width
+    const expected = [t - kerf, toothW - kerf].sort((a, b) => a - b)
+    expect(mortiseDims[0]).toBeCloseTo(expected[0], 6)
+    expect(mortiseDims[1]).toBeCloseTo(expected[1], 6)
+    // tab drawn oversize so the cut lands it on nominal tooth width
+    expect(Math.min(tab.width, tab.height)).toBeCloseTo(toothW + kerf, 6)
+  })
+
+  it('no friction-wheel part leaks into a bevel export', () => {
+    expect(parts.some((p) => p.name === `spinner-wheel-${spinner.id}`)).toBe(false)
   })
 })

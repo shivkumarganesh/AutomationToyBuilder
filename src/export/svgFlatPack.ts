@@ -3,6 +3,7 @@ import { outputChannels } from '../model/types'
 import { layshaftY } from '../model/types'
 import { camOutline, type Point2 } from '../kinematics/camProfile'
 import { gearOutline } from '../kinematics/gearProfile'
+import { CROWN_TOOTH_LENGTH, crownPitchRadius } from '../scene/spinnerLayout'
 
 /**
  * Laser-cut flat-pack layout of the frame (the zone boundary) and the cams.
@@ -168,6 +169,12 @@ function translate(path: Path, dx: number, dy: number): Path {
   return path.map((p) => ({ x: p.x + dx, y: p.y + dy }))
 }
 
+function rotatePath(path: Path, angle: number): Path {
+  const c = Math.cos(angle)
+  const sn = Math.sin(angle)
+  return path.map((p) => ({ x: p.x * c - p.y * sn, y: p.x * sn + p.y * c }))
+}
+
 function bounds(path: Path) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   for (const p of path) {
@@ -306,8 +313,79 @@ export function generateParts(spec: AutomatonSpec): Part[] {
     }
   }
 
-  // Spinner discs: keyed drive wheel for the camshaft, platform for the spindle.
+  // Spinner drives.
+  //  - friction: keyed drive wheel disc
+  //  - bevel: flat pinion gear + crown built the kit way — a slotted disc
+  //    with individual tooth tabs glued through mortises near the rim
+  //    (crown teeth point out of the sheet plane, so no single flat part
+  //    can carry them)
   for (const sp of mech.spinners) {
+    if (sp.drive === 'bevel') {
+      // pinion: a plain flat spur gear with a spindle hole
+      const pinion = growRadially(gearOutline(sp.pinionTeeth!, sp.module!), kerf / 2)
+      const pb = bounds(pinion)
+      parts.push({
+        name: `pinion-${sp.id}`,
+        outline: translate(pinion, -pb.minX, -pb.minY),
+        holes: [translate(circle(0, 0, (6 - kerf) / 2), -pb.minX, -pb.minY)],
+        width: pb.maxX - pb.minX,
+        height: pb.maxY - pb.minY,
+      })
+
+      // crown disc: D-hole + one mortise slot per tooth, tangential at the rim
+      const Rc = crownPitchRadius(sp)
+      const teeth = sp.crownTeeth!
+      const toothW = ((2 * Math.PI * Rc) / teeth) * 0.45
+      const disc = growRadially(circle(0, 0, Rc, 72), kerf / 2)
+      const db = bounds(disc)
+      const holes = [translate(dHolePath(mech.shaftDiameter - kerf, 0, 0), -db.minX, -db.minY)]
+      for (let i = 0; i < teeth; i++) {
+        const a = (i / teeth) * Math.PI * 2
+        // slot drawn undersize by kerf; tangential orientation at radius Rc − 2
+        const slot = rotatePath(rect(0, 0, t - kerf, toothW - kerf), a)
+        holes.push(
+          translate(slot, (Rc - 2) * Math.cos(a) - db.minX, (Rc - 2) * Math.sin(a) - db.minY),
+        )
+      }
+      parts.push({
+        name: `crown-disc-${sp.id}`,
+        outline: translate(disc, -db.minX, -db.minY),
+        holes,
+        width: db.maxX - db.minX,
+        height: db.maxY - db.minY,
+      })
+
+      // tooth tabs: oversize by kerf so they friction-fit the mortises;
+      // length = protruding tooth + one material thickness of tenon
+      const tabW = toothW + kerf
+      const tabL = CROWN_TOOTH_LENGTH + t + kerf
+      for (let i = 0; i < teeth; i++) {
+        parts.push({
+          name: `crown-tooth-${sp.id}-${i + 1}`,
+          outline: [
+            { x: 0, y: 0 },
+            { x: tabL, y: 0 },
+            { x: tabL, y: tabW },
+            { x: 0, y: tabW },
+          ],
+          holes: [],
+          width: tabL,
+          height: tabW,
+        })
+      }
+
+      // platform disc for the spindle top (shared with friction drives)
+      const platform = growRadially(circle(0, 0, sp.platformRadius, 72), kerf / 2)
+      const b2 = bounds(platform)
+      parts.push({
+        name: `spinner-platform-${sp.id}`,
+        outline: translate(platform, -b2.minX, -b2.minY),
+        holes: [translate(circle(0, 0, (6 - kerf) / 2), -b2.minX, -b2.minY)],
+        width: b2.maxX - b2.minX,
+        height: b2.maxY - b2.minY,
+      })
+      continue
+    }
     const wheel = growRadially(circle(0, 0, sp.wheelRadius, 64), kerf / 2)
     const b1 = bounds(wheel)
     parts.push({
@@ -391,9 +469,20 @@ export function flatPackSvg(spec: AutomatonSpec): string {
       cut.push(`<path d="${pathToSvg(translate(hole, dx, dy))}"/>`)
     }
     const pb = bounds(translate(part.outline, dx, dy))
-    labels.push(
-      `<text x="${(pb.minX + pb.maxX) / 2}" y="${pb.maxY - 2}" text-anchor="middle" font-size="4">${part.name}</text>`,
-    )
+    // tiny repeated parts (e.g. crown tooth tabs) get one grouped label
+    const groupMatch = /^(.*)-(\d+)$/.exec(part.name)
+    if (part.width < 16 && groupMatch) {
+      if (groupMatch[2] === '1') {
+        const count = parts.filter((q) => q.name.startsWith(`${groupMatch[1]}-`)).length
+        labels.push(
+          `<text x="${pb.minX}" y="${pb.minY - 2}" font-size="4">${groupMatch[1]} ×${count}</text>`,
+        )
+      }
+    } else {
+      labels.push(
+        `<text x="${(pb.minX + pb.maxX) / 2}" y="${pb.maxY - 2}" text-anchor="middle" font-size="4">${part.name}</text>`,
+      )
+    }
   }
 
   return [
