@@ -15,9 +15,11 @@ const PAD_THICKNESS = 4
 export function FigureBlock({
   character,
   signal,
+  zOffset = 0,
 }: {
   character: CharacterSpec
   signal: ChannelSignal
+  zOffset?: number
 }) {
   const shaftHeight = useDesignerStore((s) => s.spec.mechanism.shaftHeight)
   const group = useRef<Group>(null)
@@ -32,7 +34,7 @@ export function FigureBlock({
 
   const { width, height, depth, color } = character
   return (
-    <group ref={group} position={[channel.x, 0, 0]}>
+    <group ref={group} position={[channel.x, 0, zOffset]}>
       {/* body */}
       <mesh position={[0, height / 2, 0]}>
         <boxGeometry args={[width, height, depth]} />
