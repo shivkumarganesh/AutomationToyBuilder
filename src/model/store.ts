@@ -8,7 +8,7 @@ import type {
   MechanismSpec,
   PushrodSpec,
 } from './types'
-import { simplestAutomaton } from './templates'
+import { loadInitialSpec, saveToLocalStorage } from './persistence'
 
 interface DesignerState {
   spec: AutomatonSpec
@@ -83,7 +83,7 @@ const FIGURE_COLORS = ['#4fb06a', '#8a6fe8', '#e0764f', '#4fa9c9', '#c94f8e']
 const TWO_PI = Math.PI * 2
 
 export const useDesignerStore = create<DesignerState>((set) => ({
-  spec: structuredClone(simplestAutomaton),
+  spec: loadInitialSpec(),
   crankAngle: 0,
   isCranking: true,
   crankSpeed: 0.4,
@@ -221,3 +221,16 @@ export const useDesignerStore = create<DesignerState>((set) => ({
       spec: { ...s.spec, characters: s.spec.characters.filter((c) => c.id !== id) },
     })),
 }))
+
+// Auto-save: any design change lands in localStorage after a short debounce,
+// so a reload (without a share link) resumes where the user left off.
+if (typeof window !== 'undefined') {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let lastSpec = useDesignerStore.getState().spec
+  useDesignerStore.subscribe((state) => {
+    if (state.spec === lastSpec) return
+    lastSpec = state.spec
+    clearTimeout(timer)
+    timer = setTimeout(() => saveToLocalStorage(lastSpec), 400)
+  })
+}

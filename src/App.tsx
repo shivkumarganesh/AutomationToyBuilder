@@ -24,6 +24,11 @@ export default function App() {
           }}
           aria-label="Toy template"
         >
+          {currentKey === '' && (
+            <option value="" disabled>
+              Custom design — {name}
+            </option>
+          )}
           {Object.entries(templates).map(([key, spec]) => (
             <option key={key} value={key}>
               {spec.name}
