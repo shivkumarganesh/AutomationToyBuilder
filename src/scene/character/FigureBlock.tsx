@@ -7,6 +7,7 @@ import { channelValue } from '../../kinematics/channels'
 import { useDesignerStore } from '../../model/store'
 
 const PAD_THICKNESS = 4
+const HINGE_HEIGHT = 4
 
 /**
  * A character-zone figure riding an output channel. It knows nothing
@@ -14,7 +15,8 @@ const PAD_THICKNESS = 4
  * kind that signal carries:
  *
  *  - lift: rides its pushrod up and down
- *  - tilt: nods around its base on a rocking post above the stage
+ *  - tilt: nods on a hinge stand at its front edge, pushed by the rocker's
+ *    link rod from below
  *  - spin: rides the carousel platform, orbiting the spindle
  */
 export function FigureBlock({
@@ -31,6 +33,7 @@ export function FigureBlock({
   const group = useRef<Group>(null)
   const { channel } = signal
   const stageTop = frame.height + frame.materialThickness
+  const { width, height, depth, color } = character
 
   useFrame(() => {
     if (!group.current) return
@@ -43,35 +46,59 @@ export function FigureBlock({
         break
       }
       case 'tilt':
-        group.current.position.y = stageTop + 2
-        group.current.rotation.x = (-value * Math.PI) / 180
+        // link up (positive angle) lifts the back edge — the figure tips forward
+        group.current.rotation.x = (value * Math.PI) / 180
         break
       case 'spin':
-        group.current.position.y = stageTop + 10
         group.current.rotation.y = (value * Math.PI) / 180
         break
     }
   })
 
-  const { width, height, depth, color } = character
-  // spin figures stand off-centre on the platform so they orbit
-  const spinOffset =
-    signal.kind === 'spin' ? Math.max(0, signal.channel.spinner.platformRadius - width) : 0
+  const body = (
+    <>
+      <mesh position={[0, height / 2, 0]}>
+        <boxGeometry args={[width, height, depth]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      {/* head — keeps the unpainted block reading as a figure */}
+      <mesh position={[0, height + width * 0.28, 0]}>
+        <boxGeometry args={[width * 0.55, width * 0.55, width * 0.55]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+    </>
+  )
+
+  if (signal.kind === 'tilt') {
+    const hingeZ = depth / 2 - 2
+    return (
+      <group position={[channel.x, 0, zOffset]}>
+        {/* hinge stand fixed to the stage at the figure's front edge */}
+        <mesh position={[0, stageTop + HINGE_HEIGHT / 2, hingeZ]}>
+          <boxGeometry args={[width * 0.6, HINGE_HEIGHT, 5]} />
+          <meshStandardMaterial color="#3a2d1c" />
+        </mesh>
+        {/* figure rocks about the hinge axis; the link rod pushes it from below */}
+        <group ref={group} position={[0, stageTop + HINGE_HEIGHT, hingeZ]}>
+          <group position={[0, 0, -hingeZ]}>{body}</group>
+        </group>
+      </group>
+    )
+  }
+
+  if (signal.kind === 'spin') {
+    // stand off-centre on the platform so the figure orbits
+    const spinOffset = Math.max(0, signal.channel.spinner.platformRadius - width)
+    return (
+      <group ref={group} position={[channel.x, stageTop + 10, zOffset]}>
+        <group position={[spinOffset, 0, 0]}>{body}</group>
+      </group>
+    )
+  }
 
   return (
     <group ref={group} position={[channel.x, 0, zOffset]}>
-      <group position={[spinOffset, 0, 0]}>
-        {/* body */}
-        <mesh position={[0, height / 2, 0]}>
-          <boxGeometry args={[width, height, depth]} />
-          <meshStandardMaterial color={color} />
-        </mesh>
-        {/* head — keeps the unpainted block reading as a figure */}
-        <mesh position={[0, height + width * 0.28, 0]}>
-          <boxGeometry args={[width * 0.55, width * 0.55, width * 0.55]} />
-          <meshStandardMaterial color={color} />
-        </mesh>
-      </group>
+      {body}
     </group>
   )
 }
