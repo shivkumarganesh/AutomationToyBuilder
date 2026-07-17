@@ -1,28 +1,45 @@
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import type { Group } from 'three'
+import type { Group, Mesh } from 'three'
 import type { ChannelSignal } from '../../kinematics/channels'
-import { channelValue } from '../../kinematics/channels'
-import { camMaxRadius } from '../../model/types'
+import { displacementTable, sampleDisplacement } from '../../kinematics/follower'
 import { useDesignerStore } from '../../model/store'
+import { BEAM_THICKNESS, PAD_THICKNESS, rockerAngle, rockerPivotY } from '../rockerLayout'
 
 /**
- * Pivoted lever riding its cam: the follower end rests on the cam, the
- * pivot post stands one lever-length behind it (along Z), and the whole
- * beam rocks as the cam turns — the tilt output channel.
+ * Pivoted lever riding its cam: fulcrum post at the back, follower pad
+ * resting on the cam surface at the front, and a vertical link rod from
+ * the beam's follower end up through the stage to the nodding figure —
+ * the tilt output channel, with every joint visibly connected.
  */
 export function Rocker({ signal }: { signal: ChannelSignal & { kind: 'tilt' } }) {
+  const frame = useDesignerStore((s) => s.spec.frame)
   const shaftHeight = useDesignerStore((s) => s.spec.mechanism.shaftHeight)
   const beam = useRef<Group>(null)
+  const link = useRef<Mesh>(null)
   const { channel } = signal
   const { leverLength, padWidth } = channel.rocker
-  const pivotY = shaftHeight + camMaxRadius(channel.cam) + 5
+
+  // lift table of the underlying cam follower — sets the true contact height
+  const liftTable = useMemo(
+    () => displacementTable(channel.cam, padWidth),
+    [channel.cam, padWidth],
+  )
+  const pivotY = rockerPivotY(liftTable, shaftHeight)
+  const stageTop = frame.height + frame.materialThickness
+  const linkTopY = stageTop + 6 // meets the figure's underside above the stage
 
   useFrame(() => {
-    if (!beam.current) return
     const theta = useDesignerStore.getState().crankAngle
-    const tiltRad = (channelValue(signal, theta) * Math.PI) / 180
-    beam.current.rotation.x = -tiltRad
+    const s = sampleDisplacement(liftTable, theta)
+    const angle = rockerAngle(liftTable, leverLength, s)
+    if (beam.current) beam.current.rotation.x = -angle
+    if (link.current) {
+      // the link hangs from the figure down to the beam's follower end
+      const beamEndY = pivotY + Math.sin(angle) * leverLength
+      link.current.position.y = (beamEndY + linkTopY) / 2
+      link.current.scale.y = Math.max(linkTopY - beamEndY, 1)
+    }
   })
 
   return (
@@ -35,15 +52,20 @@ export function Rocker({ signal }: { signal: ChannelSignal & { kind: 'tilt' } })
       {/* rocking beam, pivoted at the post top; follower end over the cam */}
       <group ref={beam} position={[0, pivotY, -leverLength]}>
         <mesh position={[0, 0, leverLength / 2]}>
-          <boxGeometry args={[6, 4, leverLength + 10]} />
+          <boxGeometry args={[6, BEAM_THICKNESS, leverLength + 10]} />
           <meshStandardMaterial color="#9c8060" />
         </mesh>
-        {/* follower pad resting on the cam */}
-        <mesh position={[0, -3, leverLength]}>
-          <boxGeometry args={[channel.cam.thickness + 2, 3, padWidth]} />
+        {/* follower pad resting on the cam surface */}
+        <mesh position={[0, -(BEAM_THICKNESS + PAD_THICKNESS) / 2, leverLength]}>
+          <boxGeometry args={[channel.cam.thickness + 2, PAD_THICKNESS, padWidth]} />
           <meshStandardMaterial color="#9c8060" />
         </mesh>
       </group>
+      {/* link rod: beam end → through the stage → figure (unit height, scaled per frame) */}
+      <mesh ref={link} position={[0, (pivotY + linkTopY) / 2, 0]}>
+        <cylinderGeometry args={[1.6, 1.6, 1, 12]} />
+        <meshStandardMaterial color="#b59775" />
+      </mesh>
     </group>
   )
 }
