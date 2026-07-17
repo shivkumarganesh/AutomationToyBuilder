@@ -2,6 +2,7 @@ import type { CamSpec } from '../model/types'
 import { MAX_CAMS, MIN_CAMS, useDesignerStore } from '../model/store'
 import { NumberField } from './NumberField'
 import { ExportPanel } from './ExportPanel'
+import { SavePanel } from './SavePanel'
 
 /** Swap a cam to a different kind, keeping its shaft placement. */
 function convertCam(cam: CamSpec, kind: CamSpec['kind']): CamSpec {
@@ -305,6 +306,7 @@ export function Sidebar() {
       </details>
 
       <ExportPanel />
+      <SavePanel />
     </aside>
   )
 }
