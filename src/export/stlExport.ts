@@ -1,10 +1,25 @@
 import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Mesh, Object3D, Shape } from 'three'
 import { STLExporter } from 'three/addons/exporters/STLExporter.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import type { AutomatonSpec } from '../model/types'
-import { outputChannels } from '../model/types'
+import type { AutomatonSpec, CharacterSpec, LimbSpec } from '../model/types'
+import { camAngularRate, camShaftY, outputChannels } from '../model/types'
 import { camOutline } from '../kinematics/camProfile'
 import { gearOutline } from '../kinematics/gearProfile'
+import { displacementTable } from '../kinematics/follower'
+import type { ChannelSignal } from '../kinematics/channels'
+import { channelSignals } from '../kinematics/channels'
+import { rockerPivotY } from '../scene/rockerLayout'
+import {
+  bodyBaseY,
+  HINGE_HEIGHT,
+  LIMB_AXLE_DIAMETER,
+  LIMB_PIN_DIAMETER,
+  limbPinRests,
+  limbPivotFrac,
+  limbPlateOutline,
+  sourceTipRestY,
+  standHeight,
+} from '../scene/figureLayout'
 import {
   bevelMeshY,
   CROWN_DISC_THICKNESS,
@@ -156,12 +171,31 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
     parts.push({ name: 'layshaft', geometry: lay })
   }
 
-  // Rocker levers: beam + follower pad, printed flat.
+  // Rocker levers: beam + follower pad, printed flat, plus the fulcrum
+  // post and the link rod up to the figure — heights DERIVED from the cam
+  // follower's mid-travel, the same anchoring the 3D scene uses.
+  const stageTop = spec.frame.height + spec.frame.materialThickness
   for (const rocker of mech.rockers) {
     const beam = new BoxGeometry(6, 4, rocker.leverLength + 12)
     const pad = new BoxGeometry(10, 3, rocker.padWidth)
     place(pad, 0, -3.5, rocker.leverLength / 2 + 3)
     parts.push({ name: `rocker-lever-${rocker.id}`, geometry: merge([beam, pad]) })
+
+    const cam = mech.cams.find((c) => c.id === rocker.camId)
+    if (cam) {
+      const lift = displacementTable(cam, rocker.padWidth, camAngularRate(mech, cam))
+      const pivotY = rockerPivotY(lift, camShaftY(mech, cam))
+      const post = new BoxGeometry(6, 6, pivotY)
+      parts.push({ name: `rocker-post-${rocker.id}`, geometry: post })
+      // link rod: beam end (rest = pivot height) up through the stage to
+      // the figure underside at stageTop + 6
+      const linkLen = stageTop + 6 - pivotY
+      if (linkLen > 0) {
+        const link = new CylinderGeometry(1.6, 1.6, linkLen, 12)
+        link.rotateX(Math.PI / 2) // axis along Z: prints standing, like the spindles
+        parts.push({ name: `rocker-link-${rocker.id}`, geometry: link })
+      }
+    }
   }
 
   // Spinners: keyed drive wheel + spindle assembly (rod, driven disc, platform).
@@ -269,10 +303,16 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
     parts.push({ name: `spinner-spindle-${sp.id}`, geometry: merge([rod, driven, platform]) })
   }
 
-  // Character figures, printed upright. Articulated figures ship as a
-  // body (with its static head only when no head limb replaces it) plus
-  // one flat plate per limb, each carrying a pivot hole and a drive-pin
-  // hole exactly crankArm apart — the joint geometry is cut into the part.
+  // Character figures, printed upright.
+  //
+  // Block figures on tilt channels also get their hinge stand. Articulated
+  // figures ship as a complete kit: body WITH ITS STAND (height derived
+  // from the drive tip's rest height, so the linkage geometry works off
+  // the printer), one flat plate per limb with pivot/pin holes exactly
+  // crankArm apart, a pivot axle per limb, and the WIRE CRANKS that carry
+  // each channel's motion to its pins — the internal connections the 3D
+  // scene shows, as printable parts with derived run lengths.
+  const signals = channelSignals(spec)
   for (const c of spec.characters) {
     const body = new BoxGeometry(c.width, c.depth, c.height)
     place(body, 0, 0, c.height / 2)
@@ -284,9 +324,25 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
       place(head, 0, 0, c.height + headSize / 2)
       bodyPieces.push(head)
     }
-    parts.push({ name: `figure-${c.id}`, geometry: merge(bodyPieces) })
 
-    if (c.kind !== 'articulated') continue
+    if (c.kind !== 'articulated') {
+      parts.push({ name: `figure-${c.id}`, geometry: merge(bodyPieces) })
+      // tilt-riding blocks rock on a hinge stand fixed to the stage
+      const signal = signals.find((s) => s.channel.id === c.channelId)
+      if (signal?.kind === 'tilt') {
+        const stand = new BoxGeometry(c.width * 0.6, 5, HINGE_HEIGHT)
+        parts.push({ name: `hinge-stand-${c.id}`, geometry: stand })
+      }
+      continue
+    }
+
+    // stand merged under the body: the figure prints as one piece that
+    // glues to the stage at exactly the derived height
+    const standH = Math.max(standHeight(spec, c, signals), 2)
+    const stand = new BoxGeometry(8, 8, standH)
+    place(stand, 0, 0, -standH / 2)
+    parts.push({ name: `figure-${c.id}`, geometry: merge([...bodyPieces, stand]) })
+
     for (const limb of c.limbs ?? []) {
       const plate = limbPlate(limb, clearance)
       if (limb.kind === 'wings') {
@@ -297,37 +353,136 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
       } else {
         parts.push({ name: limb.id, geometry: plate })
       }
+
+      // pivot axle: through both shoulders for wings, stub for head/tail
+      const axleLen =
+        limb.kind === 'wings' ? c.width + 2 * LIMB_PLATE_THICKNESS + 6 : 14
+      const axle = new CylinderGeometry(LIMB_AXLE_DIAMETER / 2, LIMB_AXLE_DIAMETER / 2, axleLen, 16)
+      parts.push({ name: `axle-${limb.id}`, geometry: axle })
+
+      const wire = wireCrank(spec, c, limb, signals, clearance)
+      if (wire) parts.push({ name: `wire-${limb.id}`, geometry: wire })
     }
   }
 
   return parts
 }
 
+const WIRE_SECTION = 2.5
+
+/**
+ * Printable wire crank for one limb: the rigid link from the channel's
+ * output tip to the limb's drive pin(s). Every dimension is derived from
+ * the rest geometry the scene renders:
+ *  - vertical run = pin rest height − drive tip rest height
+ *  - reach = horizontal distance from the source tip to the pin
+ * Wings get a yoke: a top plate with one slot per pin (slots absorb the
+ * pins' horizontal drift as they arc). Head/tail get a flat L-crank
+ * ending in a washer that drops over the pin.
+ */
+function wireCrank(
+  spec: AutomatonSpec,
+  character: CharacterSpec,
+  limb: LimbSpec,
+  signals: ChannelSignal[],
+  clearance: number,
+): BufferGeometry | null {
+  const signal = signals.find((s) => s.channel.id === limb.channelId)
+  if (!signal || signal.kind === 'spin') return null
+  const tipRest = sourceTipRestY(spec, signal)
+  if (tipRest === null) return null
+
+  const base = bodyBaseY(spec, character, signals)
+  const pinRestY = base + limbPivotFrac(limb.kind) * character.height
+  const run = pinRestY - tipRest
+  if (run <= 0) return null
+
+  const primary = signals.find((s) => s.channel.id === character.channelId)
+  const originX = primary ? primary.channel.x : signal.channel.x
+  const sx = signal.channel.x - originX
+  const pins = limbPinRests(character, limb)
+
+  if (limb.kind === 'wings') {
+    // yoke plate spanning both pins, one slot per pin, riser bar below
+    const xs = pins.map((p) => p.x - sx)
+    const zs = pins.map((p) => p.z)
+    const margin = 5
+    const minX = Math.min(...xs, 0) - margin
+    const maxX = Math.max(...xs, 0) + margin
+    const minZ = Math.min(...zs) - margin
+    const maxZ = Math.max(...zs) + margin
+    const plate = new Shape()
+    plate.moveTo(minX, minZ)
+    plate.lineTo(maxX, minZ)
+    plate.lineTo(maxX, maxZ)
+    plate.lineTo(minX, maxZ)
+    plate.closePath()
+    const slotHalfW = LIMB_PIN_DIAMETER / 2 + clearance
+    const slotHalfL = 4 // absorbs the pins' cos-drift along X
+    for (const [i, px] of xs.entries()) {
+      const slot = new Shape()
+      const pz = zs[i]
+      slot.moveTo(px - slotHalfL, pz - slotHalfW)
+      slot.lineTo(px + slotHalfL, pz - slotHalfW)
+      slot.lineTo(px + slotHalfL, pz + slotHalfW)
+      slot.lineTo(px - slotHalfL, pz + slotHalfW)
+      slot.closePath()
+      plate.holes.push(slot)
+    }
+    const yoke = new ExtrudeGeometry(plate, { depth: WIRE_SECTION, bevelEnabled: false })
+    // riser: from the rod tip up to the yoke underside
+    const riser = new BoxGeometry(WIRE_SECTION, WIRE_SECTION, run)
+    place(riser, 0, 0, -run / 2)
+    // mounting pad that glues onto the rod tip
+    const pad = new BoxGeometry(6, 6, 3)
+    place(pad, 0, 0, -run - 1.5)
+    return merge([yoke, riser, pad])
+  }
+
+  // head/tail: flat L-crank in one plane — vertical run, horizontal
+  // reach, washer end that drops over the pin
+  const pin = pins[0]
+  const reach = Math.hypot(pin.x - sx, pin.z)
+  const shape = new Shape()
+  const h = WIRE_SECTION
+  shape.moveTo(-h / 2, 0)
+  shape.lineTo(h / 2, 0)
+  shape.lineTo(h / 2, run - h)
+  shape.lineTo(reach, run - h)
+  shape.lineTo(reach, run)
+  shape.lineTo(-h / 2, run)
+  shape.closePath()
+  const washer = new Shape()
+  washer.absarc(reach, run - h / 2, 3, 0, Math.PI * 2, false)
+  const washerHole = new Shape()
+  washerHole.absarc(reach, run - h / 2, LIMB_PIN_DIAMETER / 2 + clearance, 0, Math.PI * 2, true)
+  washer.holes.push(washerHole)
+  const arm = new ExtrudeGeometry(shape, { depth: WIRE_SECTION, bevelEnabled: false })
+  const end = new ExtrudeGeometry(washer, { depth: WIRE_SECTION, bevelEnabled: false })
+  return merge([arm, end])
+}
+
 const LIMB_PLATE_THICKNESS = 3
-const LIMB_PIVOT_HOLE_R = 1.5
-const LIMB_PIN_HOLE_R = 1.2
 
 /**
  * Flat limb plate: rounded paddle from the drive pin hole (at −crankArm)
  * through the pivot hole (at the origin) out to the tip (at +length),
- * printed flat. Hole spacing IS the linkage geometry.
+ * printed flat. Same outline the laser exporter cuts; hole spacing IS
+ * the linkage geometry.
  */
 function limbPlate(
   limb: { length: number; width: number; crankArm: number },
   clearance: number,
 ): BufferGeometry {
-  const halfW = Math.max(limb.width / 2, 4)
+  const pts = limbPlateOutline(limb)
   const shape = new Shape()
-  shape.moveTo(-limb.crankArm, -halfW / 2)
-  shape.lineTo(limb.length, -halfW)
-  shape.absarc(limb.length, 0, halfW, -Math.PI / 2, Math.PI / 2, false)
-  shape.lineTo(-limb.crankArm, halfW / 2)
-  shape.absarc(-limb.crankArm, 0, halfW / 2, Math.PI / 2, (3 * Math.PI) / 2, false)
+  shape.moveTo(pts[0].x, pts[0].y)
+  for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y)
   shape.closePath()
   const pivot = new Shape()
-  pivot.absarc(0, 0, LIMB_PIVOT_HOLE_R + clearance, 0, Math.PI * 2, true)
+  pivot.absarc(0, 0, LIMB_AXLE_DIAMETER / 2 + clearance, 0, Math.PI * 2, true)
   const pin = new Shape()
-  pin.absarc(-limb.crankArm, 0, LIMB_PIN_HOLE_R + clearance, 0, Math.PI * 2, true)
+  pin.absarc(-limb.crankArm, 0, LIMB_PIN_DIAMETER / 2 + clearance, 0, Math.PI * 2, true)
   shape.holes.push(pivot, pin)
   return new ExtrudeGeometry(shape, { depth: LIMB_PLATE_THICKNESS, bevelEnabled: false })
 }

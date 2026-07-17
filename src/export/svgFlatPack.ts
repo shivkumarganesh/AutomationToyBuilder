@@ -1,13 +1,24 @@
-import type { AutomatonSpec } from '../model/types'
-import { outputChannels } from '../model/types'
+import type { AutomatonSpec, CharacterSpec } from '../model/types'
+import { camAngularRate, camShaftY, outputChannels } from '../model/types'
 import { layshaftY } from '../model/types'
 import { camOutline, type Point2 } from '../kinematics/camProfile'
 import { gearOutline } from '../kinematics/gearProfile'
+import { displacementTable } from '../kinematics/follower'
+import { channelSignals, type ChannelSignal } from '../kinematics/channels'
+import { rockerPivotY } from '../scene/rockerLayout'
 import {
   CROWN_TOOTH_LENGTH,
   crownPitchRadius,
   genevaWheelOutline,
 } from '../scene/spinnerLayout'
+import {
+  HINGE_HEIGHT,
+  LIMB_AXLE_DIAMETER,
+  LIMB_PIN_DIAMETER,
+  limbPivotFrac,
+  limbPlateOutline,
+  standHeight,
+} from '../scene/figureLayout'
 
 /**
  * Laser-cut flat-pack layout of the frame (the zone boundary) and the cams.
@@ -460,7 +471,10 @@ export function generateParts(spec: AutomatonSpec): Part[] {
     })
   }
 
-  // Rocker levers: beam with a pivot hole at the fulcrum end.
+  // Rocker levers: beam with a pivot hole at the fulcrum end, plus the
+  // fulcrum post and link-rod strips — heights DERIVED from the follower's
+  // mid-travel, exactly as the scene places them.
+  const stageTop = spec.frame.height + t
   for (const rocker of mech.rockers) {
     const length = rocker.leverLength + 12
     const beamW = 8
@@ -476,9 +490,151 @@ export function generateParts(spec: AutomatonSpec): Part[] {
       width: length,
       height: beamW,
     })
+    const cam = mech.cams.find((c) => c.id === rocker.camId)
+    if (cam) {
+      const lift = displacementTable(cam, rocker.padWidth, camAngularRate(mech, cam))
+      const pivotY = rockerPivotY(lift, camShaftY(mech, cam))
+      parts.push(stripPart(`rocker-post-${rocker.id}`, 6, pivotY))
+      const linkLen = stageTop + 6 - pivotY
+      if (linkLen > 0) parts.push(stripPart(`rocker-link-${rocker.id}`, 4, linkLen))
+    }
+  }
+
+  // Character-zone parts: every figure gets flat laser parts too, so a
+  // toy can be built entirely from sheet stock (bodies laminate from
+  // layers of the sheet).
+  const signals = channelSignals(spec)
+  for (const c of spec.characters) {
+    parts.push(...characterParts(spec, c, signals, kerf))
   }
 
   return parts
+}
+
+/** Plain rectangular strip part (posts, links, stands). */
+function stripPart(name: string, w: number, h: number): Part {
+  return {
+    name,
+    outline: [
+      { x: 0, y: 0 },
+      { x: w, y: 0 },
+      { x: w, y: h },
+      { x: 0, y: h },
+    ],
+    holes: [],
+    width: w,
+    height: h,
+  }
+}
+
+/** Running-fit hole radius for a rotating shaft/pin of the given diameter. */
+function runningHole(diameter: number, kerf: number): number {
+  return (diameter + BEARING_CLEARANCE - kerf) / 2
+}
+
+/**
+ * Flat laser parts for one figure.
+ *
+ * Block figures cut as a front silhouette (body + head in one outline).
+ * Articulated figures cut as a kit: a SIDE-profile body plate carrying a
+ * running-fit axle hole at each limb's derived pivot position, the stand
+ * (derived height), and one paddle plate per limb — the same outline the
+ * STL prints, with the pivot/pin hole pair exactly crankArm apart. Wire
+ * cranks bend from wire stock (or print from the STL kit).
+ */
+function characterParts(
+  spec: AutomatonSpec,
+  c: CharacterSpec,
+  signals: ChannelSignal[],
+  kerf: number,
+): Part[] {
+  const out: Part[] = []
+  const hasHeadLimb = c.kind === 'articulated' && (c.limbs ?? []).some((l) => l.kind === 'head')
+
+  // silhouette: body rectangle, head bump on top unless a head limb replaces it
+  const headSize = c.width * 0.55
+  const silhouette = (w: number): Path => {
+    const pts: Path = [
+      { x: 0, y: 0 },
+      { x: w, y: 0 },
+      { x: w, y: c.height },
+    ]
+    if (!hasHeadLimb) {
+      pts.push(
+        { x: (w + headSize) / 2, y: c.height },
+        { x: (w + headSize) / 2, y: c.height + headSize },
+        { x: (w - headSize) / 2, y: c.height + headSize },
+        { x: (w - headSize) / 2, y: c.height },
+      )
+    }
+    pts.push({ x: 0, y: c.height })
+    return pts
+  }
+
+  if (c.kind !== 'articulated') {
+    const w = c.width
+    out.push({
+      name: `figure-${c.id}`,
+      outline: silhouette(w),
+      holes: [],
+      width: w,
+      height: c.height + headSize,
+    })
+    const signal = signals.find((s) => s.channel.id === c.channelId)
+    if (signal?.kind === 'tilt') {
+      out.push(stripPart(`hinge-stand-${c.id}`, c.width * 0.6, HINGE_HEIGHT + 2))
+    }
+    return out
+  }
+
+  // articulated: SIDE profile (depth × height) so limb axles cross the sheet
+  const holes: Path[] = []
+  for (const limb of c.limbs ?? []) {
+    const y = Math.min(limbPivotFrac(limb.kind) * c.height, c.height - 3)
+    // wings/head axles cross mid-depth; the tail axle sits at the back edge
+    const x = limb.kind === 'tail' ? 3 : c.depth / 2
+    holes.push(circle(x, y, runningHole(LIMB_AXLE_DIAMETER, kerf)))
+  }
+  out.push({
+    name: `figure-${c.id}`,
+    outline: [
+      { x: 0, y: 0 },
+      { x: c.depth, y: 0 },
+      { x: c.depth, y: c.height },
+      { x: 0, y: c.height },
+    ],
+    holes,
+    width: c.depth,
+    height: c.height,
+  })
+  out.push(stripPart(`figure-stand-${c.id}`, 8, Math.max(standHeight(spec, c, signals), 2)))
+
+  for (const limb of c.limbs ?? []) {
+    const raw = limbPlateOutline(limb)
+    const grown = growRadially(raw, kerf / 2)
+    const b = bounds(grown)
+    const plate = (name: string): Part => ({
+      name,
+      outline: translate(grown, -b.minX, -b.minY),
+      holes: [
+        translate(circle(0, 0, runningHole(LIMB_AXLE_DIAMETER, kerf)), -b.minX, -b.minY),
+        translate(
+          circle(-limb.crankArm, 0, runningHole(LIMB_PIN_DIAMETER, kerf)),
+          -b.minX,
+          -b.minY,
+        ),
+      ],
+      width: b.maxX - b.minX,
+      height: b.maxY - b.minY,
+    })
+    if (limb.kind === 'wings') {
+      // symmetric plate: left and right are the same part flipped over
+      out.push(plate(`${limb.id}-left`), plate(`${limb.id}-right`))
+    } else {
+      out.push(plate(limb.id))
+    }
+  }
+  return out
 }
 
 function pathToSvg(path: Path): string {
