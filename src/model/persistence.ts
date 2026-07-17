@@ -152,12 +152,25 @@ export function parseSpec(json: string): AutomatonSpec {
   const spinners = rawSpinners.map((raw, i) => {
     const sp = raw as Record<string, unknown>
     if (typeof sp !== 'object' || sp === null) fail(`spinner[${i}] must be an object`)
-    return {
+    const base = {
       id: str(sp.id, `spinner[${i}].id`),
       position: num(sp.position, `spinner[${i}].position`, 0, 1),
       ratio: num(sp.ratio, `spinner[${i}].ratio`, 0.2, 10),
       wheelRadius: num(sp.wheelRadius, `spinner[${i}].wheelRadius`, 4, 60),
       platformRadius: num(sp.platformRadius, `spinner[${i}].platformRadius`, 5, 120),
+    }
+    if (sp.drive === undefined || sp.drive === 'friction') return base
+    if (sp.drive !== 'bevel') fail(`spinner[${i}].drive unknown`)
+    const crownTeeth = Math.round(num(sp.crownTeeth, `spinner[${i}].crownTeeth`, 8, 48))
+    const pinionTeeth = Math.round(num(sp.pinionTeeth, `spinner[${i}].pinionTeeth`, 6, 24))
+    if (pinionTeeth >= crownTeeth)
+      fail(`spinner[${i}]: the pinion must be smaller than the crown gear`)
+    return {
+      ...base,
+      drive: 'bevel' as const,
+      crownTeeth,
+      pinionTeeth,
+      module: num(sp.module, `spinner[${i}].module`, 1, 4),
     }
   })
 

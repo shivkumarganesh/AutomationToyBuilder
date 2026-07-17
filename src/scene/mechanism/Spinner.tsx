@@ -1,55 +1,134 @@
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import type { Group, Mesh } from 'three'
+import { ExtrudeGeometry, Shape, type Group } from 'three'
 import type { ChannelSignal } from '../../kinematics/channels'
 import { channelValue } from '../../kinematics/channels'
+import { gearOutline } from '../../kinematics/gearProfile'
 import { useDesignerStore } from '../../model/store'
 import {
+  bevelMeshY,
   contactOffset,
+  CROWN_DISC_THICKNESS,
+  CROWN_TOOTH_LENGTH,
+  crownPitchRadius,
+  crownPlaneOffset,
   DISC_THICKNESS,
   drivenDiscRadius,
+  PINION_THICKNESS,
   SPINDLE_RADIUS,
-  WHEEL_THICKNESS,
 } from '../spinnerLayout'
 
 /**
- * Friction drive: a wheel on the camshaft rubs the horizontal driven disc
- * at the base of a vertical spindle. The wheel sits OFFSET along the
- * shaft from the spindle axis — contact at the axis would transmit zero
- * torque — and that contact radius is exactly what realises the spin
- * ratio (ω_out = ω_in · wheelRadius / contactRadius).
+ * Vertical spindle drive, in either style:
+ *
+ *  - friction: wheel on the camshaft rubs the driven disc OFF-AXIS
+ *    (contact radius realises the ratio)
+ *  - bevel: crown gear on the camshaft meshes a horizontal pinion at the
+ *    spindle base; the spindle axis sits one pinion pitch radius from the
+ *    crown plane, the mesh one crown pitch radius above the shaft, and
+ *    the ratio is crownTeeth / pinionTeeth by construction
  */
 export function Spinner({ signal }: { signal: ChannelSignal & { kind: 'spin' } }) {
   const frame = useDesignerStore((s) => s.spec.frame)
   const shaftHeight = useDesignerStore((s) => s.spec.mechanism.shaftHeight)
-  const wheel = useRef<Mesh>(null)
+  const driveRef = useRef<Group>(null)
   const spindle = useRef<Group>(null)
   const { channel } = signal
-  const { wheelRadius } = channel.spinner
+  const spinner = channel.spinner
 
-  // the wheel's contact plane sits this far from the spindle axis
-  const wheelX = -contactOffset(channel.spinner)
-  const discRadius = drivenDiscRadius(channel.spinner)
-
-  const discY = shaftHeight + wheelRadius + DISC_THICKNESS / 2
   const stageTop = frame.height + frame.materialThickness
   const platformY = stageTop + 8
 
   useFrame(() => {
     const theta = useDesignerStore.getState().crankAngle
-    if (wheel.current) wheel.current.rotation.x = theta
+    if (driveRef.current) driveRef.current.rotation.x = theta
     if (spindle.current)
       spindle.current.rotation.y = (channelValue(signal, theta) * Math.PI) / 180
   })
 
+  const isBevel = spinner.drive === 'bevel'
+
+  const pinionGeo = useMemo(() => {
+    if (!isBevel) return null
+    const pts = gearOutline(spinner.pinionTeeth!, spinner.module!)
+    const shape = new Shape()
+    shape.moveTo(pts[0].x, pts[0].y)
+    for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y)
+    shape.closePath()
+    const geo = new ExtrudeGeometry(shape, { depth: PINION_THICKNESS, bevelEnabled: false })
+    geo.translate(0, 0, -PINION_THICKNESS / 2)
+    geo.rotateX(-Math.PI / 2) // lie horizontal, spin about Y
+    return geo
+  }, [isBevel, spinner.pinionTeeth, spinner.module])
+
+  if (isBevel) {
+    const Rc = crownPitchRadius(spinner)
+    const meshY = bevelMeshY(spinner, shaftHeight)
+    const crownX = -crownPlaneOffset(spinner) // spindle axis is the group origin
+    const teeth = spinner.crownTeeth!
+    const toothW = ((2 * Math.PI * Rc) / teeth) * 0.45
+
+    return (
+      <group position={[channel.x, 0, 0]}>
+        {/* crown gear on the camshaft: disc + axial teeth facing the spindle */}
+        <group ref={driveRef} position={[crownX, shaftHeight, 0]}>
+          <mesh rotation-z={Math.PI / 2}>
+            <cylinderGeometry args={[Rc, Rc, CROWN_DISC_THICKNESS, 40]} />
+            <meshStandardMaterial color="#c96f4f" />
+          </mesh>
+          {Array.from({ length: teeth }, (_, i) => {
+            const a = (i / teeth) * Math.PI * 2
+            return (
+              <mesh
+                key={i}
+                position={[
+                  CROWN_DISC_THICKNESS / 2 + CROWN_TOOTH_LENGTH / 2,
+                  (Rc - 2) * Math.cos(a),
+                  (Rc - 2) * Math.sin(a),
+                ]}
+                rotation-x={a}
+              >
+                <boxGeometry args={[CROWN_TOOTH_LENGTH, 4, toothW]} />
+                <meshStandardMaterial color="#c96f4f" />
+              </mesh>
+            )
+          })}
+        </group>
+        {/* vertical spindle: pinion at the mesh height, rod, platform */}
+        <group ref={spindle}>
+          {pinionGeo && (
+            <mesh geometry={pinionGeo} position={[0, meshY, 0]}>
+              <meshStandardMaterial color="#4f9fc9" />
+            </mesh>
+          )}
+          <mesh position={[0, (meshY + platformY) / 2, 0]}>
+            <cylinderGeometry
+              args={[SPINDLE_RADIUS, SPINDLE_RADIUS, platformY - meshY, 16]}
+            />
+            <meshStandardMaterial color="#8d6e63" />
+          </mesh>
+          <mesh position={[0, platformY, 0]}>
+            <cylinderGeometry
+              args={[spinner.platformRadius, spinner.platformRadius, DISC_THICKNESS, 40]}
+            />
+            <meshStandardMaterial color="#c9a06a" />
+          </mesh>
+        </group>
+      </group>
+    )
+  }
+
+  // friction drive
+  const wheelX = -contactOffset(spinner)
+  const discRadius = drivenDiscRadius(spinner)
+  const discY = shaftHeight + spinner.wheelRadius + DISC_THICKNESS / 2
+
   return (
     <group position={[channel.x, 0, 0]}>
-      {/* drive wheel on the camshaft, offset so its rim grips the disc off-axis */}
-      <mesh ref={wheel} position={[wheelX, shaftHeight, 0]} rotation-z={Math.PI / 2}>
-        <cylinderGeometry args={[wheelRadius, wheelRadius, WHEEL_THICKNESS, 32]} />
+      <mesh ref={driveRef as never} position={[wheelX, shaftHeight, 0]} rotation-z={Math.PI / 2}>
+        <cylinderGeometry args={[spinner.wheelRadius, spinner.wheelRadius, 8, 32]} />
         <meshStandardMaterial color="#5a8296" />
       </mesh>
-      {/* vertical spindle: driven disc + rod + platform, all spinning together */}
       <group ref={spindle}>
         <mesh position={[0, discY, 0]}>
           <cylinderGeometry args={[discRadius, discRadius, DISC_THICKNESS, 40]} />
@@ -63,7 +142,7 @@ export function Spinner({ signal }: { signal: ChannelSignal & { kind: 'spin' } }
         </mesh>
         <mesh position={[0, platformY, 0]}>
           <cylinderGeometry
-            args={[channel.spinner.platformRadius, channel.spinner.platformRadius, DISC_THICKNESS, 40]}
+            args={[spinner.platformRadius, spinner.platformRadius, DISC_THICKNESS, 40]}
           />
           <meshStandardMaterial color="#c9a06a" />
         </mesh>

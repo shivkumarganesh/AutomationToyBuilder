@@ -5,7 +5,14 @@ import type { AutomatonSpec } from '../model/types'
 import { outputChannels } from '../model/types'
 import { camOutline } from '../kinematics/camProfile'
 import { gearOutline } from '../kinematics/gearProfile'
-import { drivenDiscRadius } from '../scene/spinnerLayout'
+import {
+  bevelMeshY,
+  CROWN_DISC_THICKNESS,
+  CROWN_TOOTH_LENGTH,
+  crownPitchRadius,
+  drivenDiscRadius,
+  PINION_THICKNESS,
+} from '../scene/spinnerLayout'
 
 /**
  * 3D-printable parts (binary STL, mm, Z-up, laid flat on the build plate):
@@ -155,6 +162,54 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
 
   // Spinners: keyed drive wheel + spindle assembly (rod, driven disc, platform).
   for (const sp of mech.spinners) {
+    if (sp.drive === 'bevel') {
+      // crown gear: keyed disc with axial teeth on the rim
+      const Rc = crownPitchRadius(sp)
+      const discShape = new Shape()
+      discShape.absarc(0, 0, Rc, 0, Math.PI * 2, false)
+      discShape.holes.push(dHole(shaftR + clearance))
+      const disc = new ExtrudeGeometry(discShape, {
+        depth: CROWN_DISC_THICKNESS,
+        bevelEnabled: false,
+      })
+      const teethGeos: BufferGeometry[] = [disc]
+      const teeth = sp.crownTeeth!
+      const toothW = ((2 * Math.PI * Rc) / teeth) * 0.45
+      for (let i = 0; i < teeth; i++) {
+        const a = (i / teeth) * Math.PI * 2
+        const tooth = new BoxGeometry(toothW, 4, CROWN_TOOTH_LENGTH)
+        tooth.rotateZ(a + Math.PI / 2)
+        tooth.translate(
+          (Rc - 2) * Math.cos(a),
+          (Rc - 2) * Math.sin(a),
+          CROWN_DISC_THICKNESS + CROWN_TOOTH_LENGTH / 2,
+        )
+        teethGeos.push(tooth)
+      }
+      parts.push({ name: `crown-${sp.id}`, geometry: merge(teethGeos) })
+
+      // spindle printed as one piece: pinion, rod, platform
+      const pts = gearOutline(sp.pinionTeeth!, sp.module!)
+      const pinShape = new Shape()
+      pinShape.moveTo(pts[0].x, pts[0].y)
+      for (let i = 1; i < pts.length; i++) pinShape.lineTo(pts[i].x, pts[i].y)
+      pinShape.closePath()
+      const pinion = new ExtrudeGeometry(pinShape, {
+        depth: PINION_THICKNESS,
+        bevelEnabled: false,
+      })
+      const meshY = bevelMeshY(sp, mech.shaftHeight)
+      const top = spec.frame.height + spec.frame.materialThickness + 8
+      const rodLen = top - meshY + PINION_THICKNESS / 2
+      const rod = new CylinderGeometry(3, 3, rodLen, 20)
+      rod.rotateX(Math.PI / 2)
+      place(rod, 0, 0, rodLen / 2)
+      const platform = new CylinderGeometry(sp.platformRadius, sp.platformRadius, 4, 48)
+      platform.rotateX(Math.PI / 2)
+      place(platform, 0, 0, rodLen - 2)
+      parts.push({ name: `spinner-spindle-${sp.id}`, geometry: merge([pinion, rod, platform]) })
+      continue
+    }
     const wheelShape = new Shape()
     wheelShape.absarc(0, 0, sp.wheelRadius, 0, Math.PI * 2, false)
     wheelShape.holes.push(dHole(shaftR + clearance))
