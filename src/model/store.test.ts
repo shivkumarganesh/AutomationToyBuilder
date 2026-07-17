@@ -140,6 +140,17 @@ describe('articulated characters', () => {
     expect(new Set(limbs.map((l) => l.id)).size).toBe(3)
   })
 
+  it('toggleFigureXray flips per-figure x-ray and loadTemplate clears it', () => {
+    const figure = state().spec.characters[0]
+    state().toggleFigureXray(figure.id)
+    expect(state().xrayFigures).toContain(figure.id)
+    state().toggleFigureXray(figure.id)
+    expect(state().xrayFigures).not.toContain(figure.id)
+    state().toggleFigureXray(figure.id)
+    state().loadTemplate(simplestAutomaton)
+    expect(state().xrayFigures).toHaveLength(0)
+  })
+
   it('removing a channel strips limbs driven by it from surviving figures', () => {
     const figure = state().spec.characters[0] // rides rod-a (cam-eccentric)
     state().setCharacterKind(figure.id, 'articulated')

@@ -24,8 +24,12 @@ interface DesignerState {
   crankSpeed: number
   /** Render box walls semi-transparent to reveal the mechanism. */
   seeThrough: boolean
+  /** Figure ids rendered x-ray (translucent body revealing the linkage). */
+  xrayFigures: string[]
 
   setCrankAngle: (angle: number) => void
+  /** Toggle a figure between solid and x-ray (click on the figure). */
+  toggleFigureXray: (id: string) => void
   advanceCrank: (deltaSeconds: number) => void
   setCranking: (on: boolean) => void
   setCrankSpeed: (revPerSec: number) => void
@@ -145,6 +149,14 @@ export const useDesignerStore = create<DesignerState>((set) => ({
   isCranking: true,
   crankSpeed: 0.4,
   seeThrough: true,
+  xrayFigures: [],
+
+  toggleFigureXray: (id) =>
+    set((s) => ({
+      xrayFigures: s.xrayFigures.includes(id)
+        ? s.xrayFigures.filter((x) => x !== id)
+        : [...s.xrayFigures, id],
+    })),
 
   setCrankAngle: (angle) => set({ crankAngle: ((angle % TWO_PI) + TWO_PI) % TWO_PI }),
   advanceCrank: (dt) =>
@@ -222,7 +234,7 @@ export const useDesignerStore = create<DesignerState>((set) => ({
   updateExport: (patch) =>
     set((s) => ({ spec: { ...s.spec, export: { ...s.spec.export, ...patch } } })),
 
-  loadTemplate: (spec) => set({ spec: structuredClone(spec), crankAngle: 0 }),
+  loadTemplate: (spec) => set({ spec: structuredClone(spec), crankAngle: 0, xrayFigures: [] }),
 
   addCam: () =>
     set((s) => {
