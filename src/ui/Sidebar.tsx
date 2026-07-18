@@ -2,6 +2,7 @@ import type { CamSpec, CharacterSpec, LimbKind } from '../model/types'
 import { gearRatio, layshaftY, spinnerRatio } from '../model/types'
 import { channelCount, MAX_CHANNELS, MAX_LIMBS, useDesignerStore } from '../model/store'
 import { grashofOk } from '../kinematics/linkage'
+import { DEFAULT_FIGURE_SHAPE, FIGURE_SHAPES } from '../model/figures'
 import { NumberField } from './NumberField'
 import { ExportPanel } from './ExportPanel'
 import { SavePanel } from './SavePanel'
@@ -178,7 +179,22 @@ function CharacterControls({ character: ch }: { character: CharacterSpec }) {
         >
           <option value="block">Block</option>
           <option value="articulated">Articulated</option>
+          <option value="silhouette">Silhouette</option>
         </select>
+        {ch.kind === 'silhouette' && (
+          <select
+            style={{ marginLeft: 6 }}
+            title="Figure shape from the library"
+            value={ch.shape ?? DEFAULT_FIGURE_SHAPE}
+            onChange={(e) => updateCharacter(ch.id, { shape: e.target.value })}
+          >
+            {Object.values(FIGURE_SHAPES).map((shape) => (
+              <option key={shape.id} value={shape.id}>
+                {shape.label}
+              </option>
+            ))}
+          </select>
+        )}
         <select
           style={{ marginLeft: 6 }}
           title="Output channel this figure rides"

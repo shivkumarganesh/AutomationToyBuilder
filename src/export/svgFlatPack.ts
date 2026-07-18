@@ -16,6 +16,7 @@ import {
   LINK_PIN_DIAMETER,
   wandPlaneCrossing,
 } from '../kinematics/linkage'
+import { DEFAULT_FIGURE_SHAPE, figureOutline } from '../model/figures'
 import {
   HINGE_HEIGHT,
   LIMB_AXLE_DIAMETER,
@@ -641,6 +642,24 @@ function characterParts(
     }
     pts.push({ x: 0, y: c.height })
     return pts
+  }
+
+  if (c.kind === 'silhouette') {
+    // curated library outline, scaled to the figure's real dimensions
+    const raw = figureOutline(c.shape ?? DEFAULT_FIGURE_SHAPE, c.width, c.height)
+    const grown = growRadially(
+      raw.map((pt) => ({ x: pt.x, y: pt.y - c.height / 2 })),
+      kerf / 2,
+    ).map((pt) => ({ x: pt.x, y: pt.y + c.height / 2 }))
+    const b = bounds(grown)
+    out.push({
+      name: `figure-${c.id}`,
+      outline: translate(grown, -b.minX, -b.minY),
+      holes: [],
+      width: b.maxX - b.minX,
+      height: b.maxY - b.minY,
+    })
+    return out
   }
 
   if (c.kind !== 'articulated') {

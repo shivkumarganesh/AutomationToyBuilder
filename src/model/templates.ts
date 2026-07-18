@@ -215,9 +215,10 @@ export const nodAndSpin: AutomatonSpec = {
     {
       id: 'figure-dancer',
       channelId: 'spin-stage',
-      kind: 'block',
-      width: 14,
-      height: 22,
+      kind: 'silhouette',
+      shape: 'dancer',
+      width: 34,
+      height: 42,
       depth: 12,
       color: '#8a6fe8',
       label: 'Dancer',
