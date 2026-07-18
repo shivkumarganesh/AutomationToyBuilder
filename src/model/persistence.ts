@@ -7,6 +7,7 @@ import type {
   LinkageSpec,
 } from './types'
 import { layshaftY } from './types'
+import { FIGURE_SHAPES } from './figures'
 import { simplestAutomaton } from './templates'
 
 /**
@@ -221,12 +222,18 @@ export function parseSpec(json: string): AutomatonSpec {
   const characters = o.characters.map((raw, i): CharacterSpec => {
     const c = raw as Record<string, unknown>
     if (typeof c !== 'object' || c === null) fail(`character[${i}] must be an object`)
-    if (c.kind !== undefined && c.kind !== 'block' && c.kind !== 'articulated')
+    if (
+      c.kind !== undefined &&
+      c.kind !== 'block' &&
+      c.kind !== 'articulated' &&
+      c.kind !== 'silhouette'
+    )
       fail(`character[${i}].kind unknown`)
     const ch: CharacterSpec = {
       id: str(c.id, `character[${i}].id`),
       channelId: str(c.channelId, `character[${i}].channelId`),
-      kind: c.kind === 'articulated' ? 'articulated' : 'block',
+      kind:
+        c.kind === 'articulated' ? 'articulated' : c.kind === 'silhouette' ? 'silhouette' : 'block',
       width: num(c.width, `character[${i}].width`, 4, 100),
       height: num(c.height, `character[${i}].height`, 4, 150),
       depth: num(c.depth, `character[${i}].depth`, 4, 100),
@@ -234,6 +241,11 @@ export function parseSpec(json: string): AutomatonSpec {
       label: str(c.label, `character[${i}].label`),
     }
     if (!rodIds.has(ch.channelId)) fail(`character[${i}] rides unknown channel ${ch.channelId}`)
+    if (ch.kind === 'silhouette') {
+      const shape = str(c.shape, `character[${i}].shape`)
+      if (!(shape in FIGURE_SHAPES)) fail(`character[${i}] uses unknown figure shape ${shape}`)
+      ch.shape = shape
+    }
     if (ch.kind === 'articulated') {
       if (!Array.isArray(c.limbs) || c.limbs.length < 1 || c.limbs.length > 3)
         fail(`character[${i}].limbs must carry 1–3 limbs`)

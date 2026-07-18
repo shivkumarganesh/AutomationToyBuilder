@@ -10,6 +10,7 @@ import type { ChannelSignal } from '../kinematics/channels'
 import { channelSignals } from '../kinematics/channels'
 import { rockerPivotY } from '../scene/rockerLayout'
 import { couplerPlateOutline, LINK_PIN_DIAMETER } from '../kinematics/linkage'
+import { DEFAULT_FIGURE_SHAPE, figureOutline } from '../model/figures'
 import {
   bodyBaseY,
   HINGE_HEIGHT,
@@ -372,6 +373,24 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
   // scene shows, as printable parts with derived run lengths.
   const signals = channelSignals(spec)
   for (const c of spec.characters) {
+    if (c.kind === 'silhouette') {
+      // flat library outline, printed lying down like the limb plates
+      const pts = figureOutline(c.shape ?? DEFAULT_FIGURE_SHAPE, c.width, c.height)
+      const shape = new Shape()
+      shape.moveTo(pts[0].x, pts[0].y)
+      for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y)
+      shape.closePath()
+      parts.push({
+        name: `figure-${c.id}`,
+        geometry: new ExtrudeGeometry(shape, { depth: 4, bevelEnabled: false }),
+      })
+      const signal = signals.find((sg) => sg.channel.id === c.channelId)
+      if (signal?.kind === 'tilt') {
+        const stand = new BoxGeometry(c.width * 0.6, 5, HINGE_HEIGHT)
+        parts.push({ name: `hinge-stand-${c.id}`, geometry: stand })
+      }
+      continue
+    }
     const body = new BoxGeometry(c.width, c.depth, c.height)
     place(body, 0, 0, c.height / 2)
     const bodyPieces = [body]

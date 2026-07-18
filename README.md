@@ -86,3 +86,8 @@ introduces a new mechanism, a profile function in `src/kinematics/`):
   through an elongated stage slot (slot length derived from the wand's actual
   crossing), giving figures a true 2D glide with pitch — the `path` output
   channel
+
+Next arc — the figure & prop library: curated silhouette figures
+(`kind: 'silhouette'`, laser-kit style flat characters from
+`src/model/figures.ts` — first shape: the Dancer), then a figure-first
+wizard, scene props, and segmented swimmers.

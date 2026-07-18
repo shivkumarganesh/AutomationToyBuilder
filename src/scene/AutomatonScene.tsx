@@ -15,6 +15,7 @@ import { Spinner } from './mechanism/Spinner'
 import { Linkage } from './mechanism/Linkage'
 import { FigureBlock } from './character/FigureBlock'
 import { ArticulatedFigure } from './character/ArticulatedFigure'
+import { SilhouetteFigure } from './character/SilhouetteFigure'
 
 /**
  * The 3D view, composed as the two zones joined by the frame:
@@ -69,6 +70,16 @@ export function AutomatonScene() {
           const siblings = spec.characters.filter((c) => c.channelId === character.channelId)
           const index = siblings.indexOf(character)
           const zOffset = (index - (siblings.length - 1) / 2) * (character.depth + 4)
+          if (character.kind === 'silhouette') {
+            return (
+              <SilhouetteFigure
+                key={character.id}
+                character={character}
+                signal={signal}
+                zOffset={zOffset}
+              />
+            )
+          }
           if (character.kind === 'articulated') {
             return (
               <ArticulatedFigure

@@ -287,6 +287,29 @@ describe('rocker hardware export', () => {
   })
 })
 
+describe('silhouette figure export', () => {
+  const spec = structuredClone(simplestAutomaton)
+  spec.characters[0] = { ...spec.characters[0], kind: 'silhouette' as const, shape: 'dancer' }
+
+  it('SVG cuts the library outline scaled to the figure size', () => {
+    const parts = generateParts(spec)
+    const figure = parts.find((p) => p.name === `figure-${spec.characters[0].id}`)!
+    expect(figure).toBeDefined()
+    // dancer outline, not the block cross (which has exactly 8 points)
+    expect(figure.outline.length).toBeGreaterThan(20)
+    expect(figure.height).toBeCloseTo(spec.characters[0].height, 0)
+  })
+
+  it('STL prints the outline as a flat plate', () => {
+    const parts = buildPrintParts(spec)
+    const figure = parts.find((p) => p.name === `figure-${spec.characters[0].id}`)!
+    figure.geometry.computeBoundingBox()
+    const bb = figure.geometry.boundingBox!
+    expect(bb.max.z - bb.min.z).toBeCloseTo(4, 3) // plate thickness
+    expect(bb.max.y - bb.min.y).toBeCloseTo(spec.characters[0].height, 1)
+  })
+})
+
 describe('linkage export parts', () => {
   const linkage = soaringGull.mechanism.linkages![0]
 

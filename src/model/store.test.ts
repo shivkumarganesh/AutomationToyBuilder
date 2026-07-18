@@ -154,6 +154,17 @@ describe('articulated characters', () => {
     expect(new Set(limbs.map((l) => l.id)).size).toBe(3)
   })
 
+  it('switching to silhouette seeds the default shape and back to block strips it', () => {
+    const figure = state().spec.characters[0]
+    state().setCharacterKind(figure.id, 'silhouette')
+    const sil = state().spec.characters.find((c) => c.id === figure.id)!
+    expect(sil.kind).toBe('silhouette')
+    expect(sil.shape).toBe('dancer')
+    state().setCharacterKind(figure.id, 'block')
+    const back = state().spec.characters.find((c) => c.id === figure.id)!
+    expect('shape' in back).toBe(false)
+  })
+
   it('toggleFigureXray flips per-figure x-ray and loadTemplate clears it', () => {
     const figure = state().spec.characters[0]
     state().toggleFigureXray(figure.id)

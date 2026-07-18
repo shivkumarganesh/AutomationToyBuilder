@@ -67,6 +67,24 @@ describe('parseSpec', () => {
     expect(() => parseSpec(JSON.stringify(tinyArm))).toThrow('out of range')
   })
 
+  it('silhouette figures round-trip and reject unknown shapes', () => {
+    const spec = structuredClone(simplestAutomaton)
+    spec.characters[0] = {
+      ...spec.characters[0],
+      kind: 'silhouette',
+      shape: 'dancer',
+    }
+    expect(parseSpec(serializeSpec(spec))).toEqual(spec)
+
+    const bad = structuredClone(spec)
+    bad.characters[0].shape = 'unicorn'
+    expect(() => parseSpec(JSON.stringify(bad))).toThrow('unknown figure shape')
+
+    const missing = structuredClone(spec)
+    delete missing.characters[0].shape
+    expect(() => parseSpec(JSON.stringify(missing))).toThrow('shape')
+  })
+
   it('block characters never carry a limbs field after parsing', () => {
     const parsed = parseSpec(serializeSpec(simplestAutomaton))
     for (const c of parsed.characters) expect('limbs' in c).toBe(false)

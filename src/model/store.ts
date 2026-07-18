@@ -13,6 +13,7 @@ import type {
   RockerSpec,
   SpinnerSpec,
 } from './types'
+import { DEFAULT_FIGURE_SHAPE, FIGURE_SHAPES } from './figures'
 import { loadInitialSpec, saveToLocalStorage } from './persistence'
 
 interface DesignerState {
@@ -529,8 +530,19 @@ export const useDesignerStore = create<DesignerState>((set) => ({
         characters: s.spec.characters.map((c) => {
           if (c.id !== id || c.kind === kind) return c
           if (kind === 'block') {
-            const { limbs: _limbs, ...rest } = c
+            const { limbs: _limbs, shape: _shape, ...rest } = c
             return { ...rest, kind }
+          }
+          if (kind === 'silhouette') {
+            const { limbs: _limbs, ...rest } = c
+            const shape = FIGURE_SHAPES[DEFAULT_FIGURE_SHAPE]
+            return {
+              ...rest,
+              kind,
+              shape: DEFAULT_FIGURE_SHAPE,
+              width: shape.defaultWidth,
+              height: shape.defaultHeight,
+            }
           }
           // starting limb: wings driven by the figure's own channel
           const wings: LimbSpec = {

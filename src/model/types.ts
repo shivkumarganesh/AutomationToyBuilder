@@ -276,8 +276,10 @@ export interface CharacterSpec {
    * block: a rigid figure riding its channel bodily.
    * articulated: a figure fixed on a stand whose LIMBS move — each limb
    * pivots on the body and is driven by a channel through a wire linkage.
+   * silhouette: a flat outline figure from the curated shape library,
+   * riding its channel bodily like a block — the laser-kit style.
    */
-  kind: 'block' | 'articulated'
+  kind: 'block' | 'articulated' | 'silhouette'
   width: number
   height: number
   depth: number
@@ -285,6 +287,8 @@ export interface CharacterSpec {
   label: string
   /** articulated only: the jointed limbs. */
   limbs?: LimbSpec[]
+  /** silhouette only: shape id from the figure library. */
+  shape?: string
 }
 
 export interface ExportSettings {
