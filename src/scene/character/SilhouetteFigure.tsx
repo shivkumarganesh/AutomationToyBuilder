@@ -87,14 +87,18 @@ export function SilhouetteFigure({
 
   if (signal.kind === 'tilt') {
     const hingeZ = depth / 2 - 2
+    // plate turned into the nod plane (Z-Y): the profile's +x points at
+    // the hinge, so the tilt reads as a peck in the figure's own plane
     return (
       <group position={[channel.x, 0, zOffset]}>
         <mesh position={[0, stageTop + HINGE_HEIGHT / 2, hingeZ]}>
-          <boxGeometry args={[width * 0.6, HINGE_HEIGHT, 5]} />
+          <boxGeometry args={[10, HINGE_HEIGHT, 5]} />
           <meshStandardMaterial color="#3a2d1c" />
         </mesh>
         <group ref={group} position={[0, stageTop + HINGE_HEIGHT, hingeZ]}>
-          <group position={[0, 0, -hingeZ]}>{plate}</group>
+          <group position={[0, 0, -hingeZ]} rotation-y={-Math.PI / 2}>
+            {plate}
+          </group>
         </group>
       </group>
     )

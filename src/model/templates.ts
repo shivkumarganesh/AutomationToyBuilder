@@ -205,9 +205,10 @@ export const nodAndSpin: AutomatonSpec = {
     {
       id: 'figure-nodder',
       channelId: 'rock-nod',
-      kind: 'block',
-      width: 18,
-      height: 24,
+      kind: 'silhouette',
+      shape: 'bird',
+      width: 34,
+      height: 26,
       depth: 14,
       color: '#4fb06a',
       label: 'Nodding Bird',
