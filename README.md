@@ -155,5 +155,12 @@ introduces a new mechanism, a profile function in `src/kinematics/`):
   drawn (`src/kinematics/drawnMotion.ts`). The editor overlays what the real
   flat follower does, and warns when a climb exceeds a 38° pressure angle
 
+- ~~draw your own figure~~ — shipped: sketch on a canvas or upload a picture;
+  `src/model/tracing.ts` keeps the largest blob, walks its boundary, simplifies
+  and smooths it into library coordinates with the mount under its lowest
+  edge, and the studio checks it against the basswood neck rule at real size
+  (with a Thicker control). The outline travels inside the design
+  (`shape: 'custom'`), so saves and share links carry it
+
 Next: segmented swimmers (phase-lagged body sections), a motion-first cam
 designer (draw the displacement curve, get the cam), per-part STL files.

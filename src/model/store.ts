@@ -560,7 +560,7 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
           // flyers are built around their wing rods — not convertible
           if (c.kind === 'flyer' || kind === 'flyer') return c
           if (kind === 'block') {
-            const { limbs: _limbs, shape: _shape, ...rest } = c
+            const { limbs: _limbs, shape: _shape, outline: _outline, ...rest } = c
             return { ...rest, kind }
           }
           if (kind === 'silhouette') {

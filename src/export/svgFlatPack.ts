@@ -22,7 +22,7 @@ import {
   DEFAULT_FIGURE_SHAPE,
   figureEngraving,
   figureLayers,
-  figureOutline,
+  characterOutline,
 } from '../model/figures'
 import { propFitsStage, propPlateOutline, propStageSlots } from '../scene/propLayout'
 import {
@@ -813,7 +813,7 @@ function characterParts(
 
   if (c.kind === 'silhouette') {
     // curated library outline, scaled to the figure's real dimensions
-    const raw = figureOutline(c.shape ?? DEFAULT_FIGURE_SHAPE, c.width, c.height)
+    const raw = characterOutline(c)
     const grown = growRadially(
       raw.map((pt) => ({ x: pt.x, y: pt.y - c.height / 2 })),
       kerf / 2,

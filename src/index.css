@@ -1278,3 +1278,95 @@ button.ghost {
 .chip.plain {
   padding: 3px 10px;
 }
+
+/* your-own-figure studio */
+.modal.studio {
+  width: min(720px, 100%);
+}
+
+.studio-body {
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.studio-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.studio-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.studio-preview {
+  width: 100%;
+  max-height: 210px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.studio-preview path {
+  fill: var(--accent);
+  stroke: rgba(0, 0, 0, 0.4);
+  stroke-width: 0.01;
+}
+
+.studio-preview .ground {
+  stroke: var(--border);
+  stroke-width: 0.012;
+}
+
+.file-btn {
+  display: inline-flex;
+  align-items: center;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.file-btn:hover {
+  border-color: var(--accent);
+}
+
+.file-btn input {
+  display: none;
+}
+
+.thumb-btn.own {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--accent);
+  min-height: 44px;
+}
+
+.card.own-card {
+  border-style: dashed;
+  justify-content: center;
+}
+
+.own-mark {
+  font-size: 44px;
+  line-height: 96px;
+  height: 96px;
+  color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .studio-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
