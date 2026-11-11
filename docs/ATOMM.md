@@ -10,6 +10,13 @@ The same code runs in two places:
 Source of truth for everything below: <https://dev.atomm.com/docs/quickstart>
 and <https://dev.atomm.com/llms-full.txt>.
 
+## Where it is deployed
+
+- GitHub Pages serves both interfaces: the original designer at
+  `/AutomationToyBuilder/` and this one at `/AutomationToyBuilder/atomm.html`.
+  Outside atomm it shows ordinary download buttons.
+- The atomm platform serves the zip from `npm run build:atomm`.
+
 ## How it works
 
 - `index.html` loads the platform SDK (`platform-sdk.js`, deferred), which

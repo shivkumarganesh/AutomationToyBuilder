@@ -101,6 +101,9 @@ export function Home() {
             <b>3</b> Make it
           </li>
         </ol>
+        <a className="ghost-link" href={`${import.meta.env.BASE_URL}atomm.html`}>
+          Try the new streamlined interface →
+        </a>
         <button className="ghost" onClick={() => setView('design')}>
           Continue with “{currentName}” →
         </button>
