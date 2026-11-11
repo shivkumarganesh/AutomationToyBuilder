@@ -1207,3 +1207,17 @@ button.ghost {
   stroke-width: 0.5;
   stroke-dasharray: 3 2;
 }
+
+.crank-controls select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.crank-controls {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
