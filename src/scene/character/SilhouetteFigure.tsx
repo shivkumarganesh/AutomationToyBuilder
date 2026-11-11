@@ -10,7 +10,7 @@ import {
   DEFAULT_FIGURE_SHAPE,
   figureEngraving,
   figureLayers,
-  figureOutline,
+  characterOutline,
 } from '../../model/figures'
 import { HINGE_HEIGHT } from '../figureLayout'
 import { useDesignerStore } from '../../model/store'
@@ -54,7 +54,7 @@ export function SilhouetteFigure({
   const shapeId = character.shape ?? DEFAULT_FIGURE_SHAPE
 
   const geometry = useMemo(() => {
-    const pts = figureOutline(shapeId, width, height)
+    const pts = characterOutline(character)
     const shape = new Shape()
     shape.moveTo(pts[0].x, pts[0].y)
     for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y)
@@ -66,7 +66,7 @@ export function SilhouetteFigure({
     // centre the plate thickness on the figure plane
     geo.translate(0, 0, -SILHOUETTE_THICKNESS / 2)
     return geo
-  }, [shapeId, width, height])
+  }, [character])
 
   useFrame(() => {
     if (!group.current) return

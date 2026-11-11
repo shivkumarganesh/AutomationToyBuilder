@@ -67,6 +67,21 @@ export function FigureThumb({ shape, color, size = 72 }: { shape: string; color:
   )
 }
 
+/** Thumbnail of a figure that carries its own outline. */
+export function CustomThumb({
+  outline,
+  aspect,
+  color,
+  size = 72,
+}: {
+  outline: Point2[]
+  aspect: number
+  color: string
+  size?: number
+}) {
+  return <OutlineThumb outline={outline} aspect={aspect} color={color} size={size} />
+}
+
 export function PropThumb({ shape, color, size = 48 }: { shape: string; color?: string; size?: number }) {
   const s = PROP_SHAPES[shape]
   if (!s) return null

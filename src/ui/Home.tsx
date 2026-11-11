@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useDesignerStore } from '../model/store'
 import { templates } from '../model/templates'
-import { FIGURE_SHAPES } from '../model/figures'
+import { CUSTOM_SHAPE, FIGURE_SHAPES } from '../model/figures'
 import {
   composeToy,
   FIGURE_INFO,
@@ -11,7 +11,8 @@ import {
   type MotionId,
 } from '../model/catalog'
 import { useUiStore } from './uiStore'
-import { Difficulty, FigureThumb, MotionIcon } from './Thumbs'
+import { CustomThumb, Difficulty, FigureThumb, MotionIcon } from './Thumbs'
+import { ShapeStudio, type StudioResult } from './ShapeStudio'
 
 /** Gallery order: sea creatures, land, then the rest. */
 const FIGURE_ORDER = [
@@ -37,6 +38,8 @@ export function Home() {
   const currentName = useDesignerStore((s) => s.spec.name)
   const setView = useUiStore((s) => s.setView)
   const [picked, setPicked] = useState<string | null>(null)
+  const [studio, setStudio] = useState(false)
+  const [own, setOwn] = useState<StudioResult | null>(null)
   const [motion, setMotion] = useState<MotionId | null>(null)
 
   const open = (spec: Parameters<typeof loadTemplate>[0]) => {
@@ -70,6 +73,12 @@ export function Home() {
   }
 
   const info = picked ? FIGURE_INFO[picked] : null
+  const pickedName =
+    picked === CUSTOM_SHAPE
+      ? 'your figure'
+      : picked
+        ? `the ${FIGURE_SHAPES[picked]?.label.toLowerCase()}`
+        : ''
   const chosen = motion ?? info?.motions[0] ?? null
 
   return (
@@ -119,6 +128,13 @@ export function Home() {
               <span className="card-blurb">{FIGURE_INFO[id]?.blurb}</span>
             </button>
           ))}
+          <button className="card figure-card own-card" onClick={() => setStudio(true)}>
+            <span className="own-mark" aria-hidden="true">
+              ✎
+            </span>
+            <span className="card-name">Draw your own</span>
+            <span className="card-blurb">Sketch it or upload a picture — we trace it and check it will cut.</span>
+          </button>
         </div>
       </section>
 
@@ -131,6 +147,18 @@ export function Home() {
         </div>
       </section>
 
+      {studio && (
+        <ShapeStudio
+          onClose={() => setStudio(false)}
+          onUse={(r) => {
+            setOwn(r)
+            setStudio(false)
+            setPicked(CUSTOM_SHAPE)
+            setMotion(null)
+          }}
+        />
+      )}
+
       {picked && info && chosen && (
         <div className="modal-backdrop" onClick={() => setPicked(null)}>
           <div
@@ -140,9 +168,13 @@ export function Home() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-head">
-              <FigureThumb shape={picked} color={info.color} size={84} />
+              {picked === CUSTOM_SHAPE && own ? (
+                <CustomThumb outline={own.outline} aspect={own.aspect} color={info.color} size={84} />
+              ) : (
+                <FigureThumb shape={picked} color={info.color} size={84} />
+              )}
               <div>
-                <h3>How should the {FIGURE_SHAPES[picked].label.toLowerCase()} move?</h3>
+                <h3>How should {pickedName} move?</h3>
                 <p>
                   Each motion comes from a different mechanism under the stage. You can
                   change everything afterwards.
@@ -185,8 +217,21 @@ export function Home() {
             </div>
             <div className="modal-foot">
               <button onClick={() => setPicked(null)}>Back</button>
-              <button className="primary big" onClick={() => open(composeToy(picked, chosen))}>
-                Build my {FIGURE_SHAPES[picked].label.toLowerCase()} →
+              <button
+                className="primary big"
+                onClick={() =>
+                  open(
+                    composeToy(
+                      picked,
+                      chosen,
+                      picked === CUSTOM_SHAPE && own
+                        ? { outline: own.outline, width: own.width, height: own.height }
+                        : undefined,
+                    ),
+                  )
+                }
+              >
+                Build {pickedName} →
               </button>
             </div>
           </div>

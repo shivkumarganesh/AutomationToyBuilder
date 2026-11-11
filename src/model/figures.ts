@@ -971,3 +971,21 @@ export function figureLayers(shapeId: string, width: number, height: number): Po
     plate.map((p) => ({ x: p.x * width, y: p.y * height })),
   )
 }
+
+/** `shape` value of a figure that carries its OWN outline (drawn or traced by the user). */
+export const CUSTOM_SHAPE = 'custom'
+
+/**
+ * A figure's outline in mm: its own traced outline if it has one,
+ * otherwise the library shape it names.
+ */
+export function characterOutline(c: {
+  shape?: string
+  outline?: Point2[]
+  width: number
+  height: number
+}): Point2[] {
+  if (c.shape === CUSTOM_SHAPE && c.outline)
+    return c.outline.map((p) => ({ x: p.x * c.width, y: p.y * c.height }))
+  return figureOutline(c.shape ?? DEFAULT_FIGURE_SHAPE, c.width, c.height)
+}

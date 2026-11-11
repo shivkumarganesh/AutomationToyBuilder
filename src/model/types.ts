@@ -320,6 +320,12 @@ export interface CharacterSpec {
    * wing that ripples. `channelId` always equals `left[0]`.
    */
   flyer?: { left: string[]; right: string[] }
+  /**
+   * silhouette with shape 'custom' only: the figure's own outline, drawn
+   * or traced by the user, normalized like the library (x ∈ [-0.5, 0.5]
+   * × width, y ∈ [0, 1] × height, base at y = 0, mount at x = 0).
+   */
+  outline?: { x: number; y: number }[]
 }
 
 /**

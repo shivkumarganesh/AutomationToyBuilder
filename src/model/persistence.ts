@@ -8,7 +8,7 @@ import type {
   PropSpec,
 } from './types'
 import { layshaftY } from './types'
-import { FIGURE_SHAPES } from './figures'
+import { CUSTOM_SHAPE, FIGURE_SHAPES } from './figures'
 import { MAX_PROPS, PROP_SHAPES } from './props'
 import { FLYER_SHAPES } from './flyers'
 import { simplestAutomaton } from './templates'
@@ -288,7 +288,19 @@ export function parseSpec(json: string): AutomatonSpec {
     }
     if (ch.kind === 'silhouette') {
       const shape = str(c.shape, `character[${i}].shape`)
-      if (!(shape in FIGURE_SHAPES)) fail(`character[${i}] uses unknown figure shape ${shape}`)
+      if (shape === CUSTOM_SHAPE) {
+        // the user's own figure: its outline travels with the design
+        if (!Array.isArray(c.outline) || c.outline.length < 3 || c.outline.length > 240)
+          fail(`character[${i}].outline must carry 3–240 points`)
+        ch.outline = c.outline.map((raw, j) => {
+          const p = raw as Record<string, unknown>
+          if (typeof p !== 'object' || p === null) fail(`character[${i}].outline[${j}] must be a point`)
+          return {
+            x: num(p.x, `character[${i}].outline[${j}].x`, -0.5, 0.5),
+            y: num(p.y, `character[${i}].outline[${j}].y`, 0, 1),
+          }
+        })
+      } else if (!(shape in FIGURE_SHAPES)) fail(`character[${i}] uses unknown figure shape ${shape}`)
       ch.shape = shape
     }
     if (ch.kind === 'articulated') {

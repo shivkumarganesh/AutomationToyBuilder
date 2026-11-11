@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { AutomatonSpec, CamSpec, CharacterSpec, OutputChannel } from '../model/types'
 import { camAngularRate, outputChannels } from '../model/types'
 import { channelCount, MAX_CHANNELS, useDesignerStore } from '../model/store'
-import { FIGURE_SHAPES, PICKABLE_FIGURES } from '../model/figures'
+import { CUSTOM_SHAPE, FIGURE_SHAPES, PICKABLE_FIGURES } from '../model/figures'
 import { FIGURE_INFO, MOTIONS, type MotionId } from '../model/catalog'
 import { grashofOk } from '../kinematics/linkage'
 import { channelSignals } from '../kinematics/channels'
@@ -11,7 +11,8 @@ import { NumberField } from './NumberField'
 import { MotionEditor } from './MotionEditor'
 import { drawnFrom } from '../kinematics/drawnMotion'
 import { SceneryControls } from './SceneryControls'
-import { FigureThumb, MotionIcon } from './Thumbs'
+import { CustomThumb, FigureThumb, MotionIcon } from './Thumbs'
+import { ShapeStudio } from './ShapeStudio'
 import { useUiStore } from './uiStore'
 
 /** The plain-language motion a channel currently produces. */
@@ -41,6 +42,7 @@ function FigureCard({ ch, spec }: { ch: CharacterSpec; spec: AutomatonSpec }) {
   const s = useDesignerStore.getState()
   const channel = outputChannels(spec).find((c) => c.id === ch.channelId)
   const [pickShape, setPickShape] = useState(false)
+  const [studio, setStudio] = useState(false)
   if (!channel) return null
   const motion = motionOf(channel)
   const drawn = (channel.kind === 'lift' || channel.kind === 'tilt') && channel.cam.kind === 'custom'
@@ -74,7 +76,11 @@ function FigureCard({ ch, spec }: { ch: CharacterSpec; spec: AutomatonSpec }) {
             title="Change the figure"
             onClick={() => setPickShape(!pickShape)}
           >
-            <FigureThumb shape={ch.shape} color={ch.color} size={44} />
+            {ch.shape === CUSTOM_SHAPE && ch.outline ? (
+              <CustomThumb outline={ch.outline} aspect={ch.width / ch.height} color={ch.color} size={44} />
+            ) : (
+              <FigureThumb shape={ch.shape} color={ch.color} size={44} />
+            )}
           </button>
         ) : (
           <span className="swatch" style={{ background: ch.color }} />
@@ -115,6 +121,7 @@ function FigureCard({ ch, spec }: { ch: CharacterSpec; spec: AutomatonSpec }) {
               onClick={() => {
                 s.updateCharacter(ch.id, {
                   shape: shape.id,
+                  outline: undefined,
                   width: shape.defaultWidth,
                   height: shape.defaultHeight,
                   label: shape.label,
@@ -126,7 +133,30 @@ function FigureCard({ ch, spec }: { ch: CharacterSpec; spec: AutomatonSpec }) {
               <FigureThumb shape={shape.id} color={FIGURE_INFO[shape.id]?.color ?? ch.color} size={40} />
             </button>
           ))}
+          <button
+            className={`thumb-btn own${ch.shape === CUSTOM_SHAPE ? ' selected' : ''}`}
+            title="Draw or upload your own figure"
+            onClick={() => setStudio(true)}
+          >
+            ✎
+          </button>
         </div>
+      )}
+      {studio && (
+        <ShapeStudio
+          onClose={() => setStudio(false)}
+          onUse={(r) => {
+            s.updateCharacter(ch.id, {
+              shape: CUSTOM_SHAPE,
+              outline: r.outline,
+              width: r.width,
+              height: r.height,
+              label: ch.shape === CUSTOM_SHAPE ? ch.label : 'My figure',
+            })
+            setStudio(false)
+            setPickShape(false)
+          }}
+        />
       )}
       {ch.kind === 'block' && (
         <button className="link-btn" onClick={() => s.setCharacterKind(ch.id, 'silhouette')}>

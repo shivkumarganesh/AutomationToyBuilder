@@ -10,7 +10,7 @@ import type { ChannelSignal } from '../kinematics/channels'
 import { channelSignals } from '../kinematics/channels'
 import { rockerPivotY } from '../scene/rockerLayout'
 import { couplerPlateOutline, LINK_PIN_DIAMETER } from '../kinematics/linkage'
-import { DEFAULT_FIGURE_SHAPE, figureLayers, figureOutline } from '../model/figures'
+import { characterOutline, DEFAULT_FIGURE_SHAPE, figureLayers } from '../model/figures'
 import { propPlateOutline } from '../scene/propLayout'
 import { generateParts, type Part } from './svgFlatPack'
 import {
@@ -441,7 +441,7 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
     }
     if (c.kind === 'silhouette') {
       // flat library outline, printed lying down like the limb plates
-      const pts = figureOutline(c.shape ?? DEFAULT_FIGURE_SHAPE, c.width, c.height)
+      const pts = characterOutline(c)
       const shape = new Shape()
       shape.moveTo(pts[0].x, pts[0].y)
       for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y)

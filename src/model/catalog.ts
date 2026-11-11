@@ -1,5 +1,5 @@
 import type { AutomatonSpec, CamSpec, CharacterSpec, PropSpec } from './types'
-import { FIGURE_SHAPES } from './figures'
+import { CUSTOM_SHAPE, FIGURE_SHAPES, type Point2 } from './figures'
 import { PROP_SHAPES } from './props'
 
 /**
@@ -143,6 +143,12 @@ export const FIGURE_INFO: Record<string, FigureInfo> = {
     scene: 'none',
     color: '#c94f8e',
   },
+  custom: {
+    blurb: 'Your own drawing or picture.',
+    motions: ['bob', 'bounce', 'spin'],
+    scene: 'none',
+    color: '#e0a54f',
+  },
   rocket: {
     blurb: 'Climbs through the clouds, falls back, tries again.',
     motions: ['drop', 'bob', 'spin'],
@@ -270,8 +276,16 @@ export function sceneProps(scene: SceneId): PropSpec[] {
  * driven by `motion`, centred in a box sized for that mechanism, with
  * the figure's natural scenery around it.
  */
-export function composeToy(shapeId: string, motion: MotionId): AutomatonSpec {
-  const shape = FIGURE_SHAPES[shapeId]
+export function composeToy(
+  shapeId: string,
+  motion: MotionId,
+  /** For shapeId 'custom': the user's own traced figure. */
+  custom?: { outline: Point2[]; width: number; height: number; label?: string },
+): AutomatonSpec {
+  const shape =
+    shapeId === CUSTOM_SHAPE && custom
+      ? { label: custom.label ?? 'My figure', defaultWidth: custom.width, defaultHeight: custom.height }
+      : FIGURE_SHAPES[shapeId]
   if (!shape) throw new Error(`unknown figure shape ${shapeId}`)
   const info = FIGURE_INFO[shapeId]
   const figure = (channelId: string): CharacterSpec => ({
@@ -282,10 +296,14 @@ export function composeToy(shapeId: string, motion: MotionId): AutomatonSpec {
     width: shape.defaultWidth,
     height: shape.defaultHeight,
     depth: 14,
-    color: info?.color ?? '#4f8fe0',
+    color: info?.color ?? '#e0a54f',
     label: shape.label,
+    ...(shapeId === CUSTOM_SHAPE && custom ? { outline: custom.outline } : {}),
   })
-  const name = `${MOTION_ADJECTIVE[motion]} ${shape.label}`
+  const name =
+    shapeId === CUSTOM_SHAPE
+      ? `My ${MOTION_ADJECTIVE[motion].toLowerCase()} figure`
+      : `${MOTION_ADJECTIVE[motion]} ${shape.label}`
   const props = sceneProps(info?.scene ?? 'none')
   const withProps = props.length > 0 ? { props } : {}
 
