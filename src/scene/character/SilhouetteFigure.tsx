@@ -1,17 +1,16 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { BufferGeometry, ExtrudeGeometry, Float32BufferAttribute, Shape, type Group } from 'three'
+import { DoubleSide, ExtrudeGeometry, Shape, type Group } from 'three'
 import type { CharacterSpec } from '../../model/types'
 import { camShaftY } from '../../model/types'
 import type { ChannelSignal } from '../../kinematics/channels'
 import { channelValue } from '../../kinematics/channels'
 import { samplePath } from '../../kinematics/linkage'
-import {
-  DEFAULT_FIGURE_SHAPE,
-  figureEngraving,
-  figureLayers,
-  characterOutline,
-} from '../../model/figures'
+import { characterOutline } from '../../model/figures'
+import { centreOf } from '../../model/relief'
+import { domeHeightAt, figureStack, stackDome } from '../reliefLayout'
+import { BURNT, ribbonGeometry, SCORCH_WIDTH, SCORE_WIDTH } from '../ribbons'
+import { useUiStore } from '../../ui/uiStore'
 import { HINGE_HEIGHT } from '../figureLayout'
 import { useDesignerStore } from '../../model/store'
 
@@ -19,8 +18,10 @@ const PAD_THICKNESS = 4
 /** Cut/print thickness of the silhouette plate (one sheet). */
 export const SILHOUETTE_THICKNESS = 4
 
-/** Thickness of a glued-on detail plate (one sheet). */
+/** Thickness of a glued-on depth or detail plate (one sheet). */
 const LAYER_THICKNESS = 3
+/** Height of a printed detail above its surface. */
+const PRINT_RELIEF = 1.2
 
 /** A slightly deeper tone of a colour, for raised detail. */
 function shade(hex: string): string {
@@ -50,8 +51,7 @@ export function SilhouetteFigure({
   const group = useRef<Group>(null)
   const { channel } = signal
   const stageTop = frame.height + frame.materialThickness
-  const { width, height, depth, color } = character
-  const shapeId = character.shape ?? DEFAULT_FIGURE_SHAPE
+  const { width, depth, color } = character
 
   const geometry = useMemo(() => {
     const pts = characterOutline(character)
@@ -94,47 +94,80 @@ export function SilhouetteFigure({
     }
   })
 
-  // raised detail plates, one on each face, and the engraved lines
+  // everything on the faces: depth levels (stepped plates for the laser
+  // route, a smooth dome for the print route), the detail plates and the
+  // engraved lines — each sitting on the level under it, on both faces
+  const method = useUiStore((s) => s.method)
   const detail = useMemo(() => {
-    const plates = figureLayers(shapeId, width, height).map((pts) => {
+    const stack = figureStack(character)
+    const half = SILHOUETTE_THICKNESS / 2
+    const extrude = (pts: { x: number; y: number }[], depth: number) => {
       const shape = new Shape()
       shape.moveTo(pts[0].x, pts[0].y)
       for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y)
       shape.closePath()
-      return new ExtrudeGeometry(shape, { depth: LAYER_THICKNESS, bevelEnabled: false })
-    })
-    const positions: number[] = []
-    for (const z of [SILHOUETTE_THICKNESS / 2 + 0.06, -SILHOUETTE_THICKNESS / 2 - 0.06]) {
-      for (const line of figureEngraving(shapeId, width, height)) {
-        for (let i = 0; i + 1 < line.length; i++) {
-          positions.push(line[i].x, line[i].y, z, line[i + 1].x, line[i + 1].y, z)
-        }
-      }
+      return new ExtrudeGeometry(shape, { depth, bevelEnabled: false })
     }
-    const lines = new BufferGeometry()
-    lines.setAttribute('position', new Float32BufferAttribute(positions, 3))
-    return { plates, lines, hasLines: positions.length > 0 }
-  }, [shapeId, width, height])
+    const plates: { geo: ExtrudeGeometry; z: number; depth: number; detail: boolean }[] = []
+    let heightOf: (pt: { x: number; y: number }, level: number) => number
+    if (method === 'print') {
+      const dome = stackDome(stack, character, LAYER_THICKNESS)
+      for (const slice of dome)
+        for (const o of slice.outlines)
+          plates.push({ geo: extrude(o, slice.to - slice.from), z: slice.from, depth: slice.to - slice.from, detail: false })
+      heightOf = (pt) => domeHeightAt(dome, pt)
+    } else {
+      stack.levels.forEach((level, k) =>
+        level.forEach((o) =>
+          plates.push({ geo: extrude(o, LAYER_THICKNESS), z: k * LAYER_THICKNESS, depth: LAYER_THICKNESS, detail: false }),
+        ),
+      )
+      heightOf = (_pt, level) => level * LAYER_THICKNESS
+    }
+    const detailDepth = method === 'print' ? PRINT_RELIEF : LAYER_THICKNESS
+    for (const d of stack.details)
+      plates.push({ geo: extrude(d.item, detailDepth), z: heightOf(centreOf(d.item), d.level), depth: detailDepth, detail: true })
+    // scored lines exist only on the laser route (the print file carries none)
+    const lines =
+      method === 'print'
+        ? []
+        : stack.engraving.map((e) => ({ line: e.item, lift: half + e.level * LAYER_THICKNESS + 0.06 }))
+    const both = (width: number) =>
+      [1, -1].map((face) => ribbonGeometry(lines, width, (pt, lift) => [pt.x, pt.y, face * lift]))
+    return { plates, score: both(SCORE_WIDTH), scorch: both(SCORCH_WIDTH) }
+  }, [character, method])
 
+  const half = SILHOUETTE_THICKNESS / 2
   const plate = (
     <group>
       <mesh geometry={geometry}>
         <meshStandardMaterial color={color} />
       </mesh>
-      {detail.plates.map((geo, i) => (
+      {detail.plates.map((pl, i) => (
         <group key={i}>
-          <mesh geometry={geo} position={[0, 0, SILHOUETTE_THICKNESS / 2]}>
-            <meshStandardMaterial color={shade(color)} />
+          <mesh geometry={pl.geo} position={[0, 0, half + pl.z]}>
+            <meshStandardMaterial color={pl.detail ? shade(color) : color} />
           </mesh>
-          <mesh geometry={geo} position={[0, 0, -SILHOUETTE_THICKNESS / 2 - LAYER_THICKNESS]}>
-            <meshStandardMaterial color={shade(color)} />
+          <mesh geometry={pl.geo} position={[0, 0, -half - pl.z - pl.depth]}>
+            <meshStandardMaterial color={pl.detail ? shade(color) : color} />
           </mesh>
         </group>
       ))}
-      {detail.hasLines && (
-        <lineSegments geometry={detail.lines}>
-          <lineBasicMaterial color="#2b1a0e" transparent opacity={0.75} />
-        </lineSegments>
+      {detail.scorch.map(
+        (geo, i) =>
+          geo && (
+            <mesh key={`h${i}`} geometry={geo}>
+              <meshBasicMaterial color={BURNT} transparent opacity={0.16} side={DoubleSide} depthWrite={false} />
+            </mesh>
+          ),
+      )}
+      {detail.score.map(
+        (geo, i) =>
+          geo && (
+            <mesh key={`s${i}`} geometry={geo}>
+              <meshBasicMaterial color={BURNT} transparent opacity={0.88} side={DoubleSide} />
+            </mesh>
+          ),
       )}
     </group>
   )

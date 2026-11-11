@@ -10,7 +10,9 @@ import type { ChannelSignal } from '../kinematics/channels'
 import { channelSignals } from '../kinematics/channels'
 import { rockerPivotY } from '../scene/rockerLayout'
 import { couplerPlateOutline, LINK_PIN_DIAMETER } from '../kinematics/linkage'
-import { characterOutline, DEFAULT_FIGURE_SHAPE, figureLayers } from '../model/figures'
+import { characterOutline } from '../model/figures'
+import { centreOf } from '../model/relief'
+import { domeHeightAt, figureStack, FLYER_RELIEF_FIRST, flyerBodyStack, stackDome } from '../scene/reliefLayout'
 import { propPlateOutline } from '../scene/propLayout'
 import { generateParts, type Part } from './svgFlatPack'
 import {
@@ -48,6 +50,8 @@ import {
  * cam holes use, so printed and cut parts are interchangeable.
  */
 
+/** Height one depth level adds to a printed dome (matches a 3 mm laser layer). */
+const DEPTH_LAYER = 3
 /** Height of printed relief detail above a figure's face. */
 const RELIEF_HEIGHT = 1.2
 const FLAT_RATIO = 0.55
@@ -434,8 +438,37 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
       // body, post and wing plates: the laser outlines with clearance fits
       const fit = { ...spec, export: { ...spec.export, kerf: -2 * clearance } }
       for (const p of generateParts(fit)) {
-        if (new RegExp(`^(body|post|wing)-${c.id}(-|$)`).test(p.name))
-          parts.push({ name: p.name, geometry: plateFromPart(p, spec.frame.materialThickness) })
+        if (!new RegExp(`^(body|post|wing)-${c.id}(-|$)`).test(p.name)) continue
+        let geometry = plateFromPart(p, spec.frame.materialThickness)
+        if (p.name === `body-${c.id}`) {
+          // the body's ridge prints as part of it: a dome on its top face
+          const ridge = flyerBodyStack(c)
+          const dome = stackDome(ridge, c, DEPTH_LAYER, FLYER_RELIEF_FIRST)
+          if (dome.length > 0) {
+            // the part is drawn from its own corner; the stack from the body's centre
+            const dx = -Math.min(...ridge.outline.map((q) => q.x))
+            const dy = -Math.min(...ridge.outline.map((q) => q.y))
+            const t = spec.frame.materialThickness
+            geometry = merge([
+              geometry,
+              ...dome.flatMap((slice) =>
+                slice.outlines.map((o) => {
+                  const ls = new Shape()
+                  ls.moveTo(o[0].x + dx, o[0].y + dy)
+                  for (let i = 1; i < o.length; i++) ls.lineTo(o[i].x + dx, o[i].y + dy)
+                  ls.closePath()
+                  return place(
+                    new ExtrudeGeometry(ls, { depth: slice.to - slice.from, bevelEnabled: false }),
+                    0,
+                    0,
+                    t + slice.from,
+                  )
+                }),
+              ),
+            ])
+          }
+        }
+        parts.push({ name: p.name, geometry })
       }
       continue
     }
@@ -446,18 +479,54 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
       shape.moveTo(pts[0].x, pts[0].y)
       for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y)
       shape.closePath()
-      // detail plates print as raised relief on the top face, in one piece
-      const relief = figureLayers(c.shape ?? DEFAULT_FIGURE_SHAPE, c.width, c.height).map((layer) => {
+      const solid = (o: { x: number; y: number }[], depth: number, z: number) => {
         const ls = new Shape()
-        ls.moveTo(layer[0].x, layer[0].y)
-        for (let i = 1; i < layer.length; i++) ls.lineTo(layer[i].x, layer[i].y)
+        ls.moveTo(o[0].x, o[0].y)
+        for (let i = 1; i < o.length; i++) ls.lineTo(o[i].x, o[i].y)
         ls.closePath()
-        return place(new ExtrudeGeometry(ls, { depth: RELIEF_HEIGHT, bevelEnabled: false }), 0, 0, 4)
-      })
-      parts.push({
-        name: `figure-${c.id}`,
-        geometry: merge([new ExtrudeGeometry(shape, { depth: 4, bevelEnabled: false }), ...relief]),
-      })
+        return place(new ExtrudeGeometry(ls, { depth, bevelEnabled: false }), 0, 0, z)
+      }
+      const stack = figureStack(c)
+      const dome = stackDome(stack, c, DEPTH_LAYER)
+      if (dome.length === 0) {
+        // no depth: one flat piece, detail plates as raised relief on top
+        const relief = stack.details.map((d) => solid(d.item, RELIEF_HEIGHT, 4))
+        parts.push({
+          name: `figure-${c.id}`,
+          geometry: merge([new ExtrudeGeometry(shape, { depth: 4, bevelEnabled: false }), ...relief]),
+        })
+      } else {
+        // depth: the figure prints as two HALVES, each flat on the bed with
+        // its dome on top; glued back to back they make a body rounded on
+        // both faces. Every slice rests on the one below — no supports.
+        const half = [
+          new ExtrudeGeometry(shape, { depth: 2, bevelEnabled: false }),
+          ...dome.flatMap((slice) => slice.outlines.map((o) => solid(o, slice.to - slice.from, 2 + slice.from))),
+          // detail plates stand proud of the dome where they sit
+          ...stack.details.map((d) => {
+            const h = domeHeightAt(dome, centreOf(d.item))
+            return solid(d.item, h + RELIEF_HEIGHT, 2)
+          }),
+        ]
+        const whole = merge(half)
+        parts.push({ name: `figure-${c.id}-half1`, geometry: whole })
+        // the other half is the mirror image, so the pair match face to face
+        const mirrored = whole.clone().scale(-1, 1, 1)
+        const index = mirrored.getIndex()
+        if (index) {
+          const arr = index.array
+          for (let i = 0; i < arr.length; i += 3) [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]
+        } else {
+          const pos = mirrored.getAttribute('position')
+          for (let i = 0; i < pos.count; i += 3) {
+            const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)]
+            pos.setXYZ(i, pos.getX(i + 1), pos.getY(i + 1), pos.getZ(i + 1))
+            pos.setXYZ(i + 1, x, y, z)
+          }
+          mirrored.computeVertexNormals()
+        }
+        parts.push({ name: `figure-${c.id}-half2`, geometry: mirrored })
+      }
       const signal = signals.find((sg) => sg.channel.id === c.channelId)
       if (signal?.kind === 'tilt') {
         const stand = new BoxGeometry(c.width * 0.6, 5, HINGE_HEIGHT)

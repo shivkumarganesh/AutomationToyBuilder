@@ -263,6 +263,10 @@ export function parseSpec(json: string): AutomatonSpec {
       label: str(c.label, `character[${i}].label`),
     }
     if (!rodIds.has(ch.channelId)) fail(`character[${i}] rides unknown channel ${ch.channelId}`)
+    if (c.relief !== undefined) {
+      if (ch.kind !== 'silhouette' && ch.kind !== 'flyer') fail(`character[${i}].relief needs a flat figure`)
+      ch.relief = Math.round(num(c.relief, `character[${i}].relief`, 0, 3))
+    }
     if (ch.kind === 'flyer') {
       const shape = str(c.shape, `character[${i}].shape`)
       if (!(shape in FLYER_SHAPES)) fail(`character[${i}] uses unknown flyer shape ${shape}`)

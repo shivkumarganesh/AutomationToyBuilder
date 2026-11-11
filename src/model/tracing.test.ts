@@ -144,7 +144,7 @@ describe('a traced figure is a first-class figure', () => {
     expect(basswoodAudit(spec)).toEqual([])
     const part = generateParts(spec).find((p) => p.name === `figure-${figure.id}`)!
     expect(part.outline.length).toBe(traced.outline.length)
-    expect(buildPrintParts(spec).some((p) => p.name === `figure-${figure.id}`)).toBe(true)
+    expect(buildPrintParts(spec).some((p) => p.name.startsWith(`figure-${figure.id}`))).toBe(true)
     // a save that claims a custom figure but carries no outline is refused
     const broken = structuredClone(spec)
     delete broken.characters[0].outline

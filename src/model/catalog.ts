@@ -86,6 +86,8 @@ export interface FigureInfo {
   motions: MotionId[]
   scene: SceneId
   color: string
+  /** Depth levels a new toy with this figure starts with (0 = flat). */
+  relief?: number
 }
 
 export const FIGURE_INFO: Record<string, FigureInfo> = {
@@ -94,48 +96,56 @@ export const FIGURE_INFO: Record<string, FigureInfo> = {
     motions: ['bob', 'swoop', 'nod'],
     scene: 'sea',
     color: '#4f7fc9',
+    relief: 2,
   },
   dolphin: {
     blurb: 'Leaps out of the waves and dives back in.',
     motions: ['swoop', 'bounce', 'bob'],
     scene: 'sea',
     color: '#5aa0c8',
+    relief: 2,
   },
   fish: {
     blurb: 'Darts and wiggles between the waves.',
     motions: ['bounce', 'bob', 'swoop'],
     scene: 'sea',
     color: '#e0764f',
+    relief: 2,
   },
   ray: {
     blurb: 'Glides like a kite under water.',
     motions: ['swoop', 'bob', 'spin'],
     scene: 'sea',
     color: '#8a6fe8',
+    relief: 2,
   },
   sailboat: {
     blurb: 'Pitches and rolls on a choppy sea.',
     motions: ['nod', 'bob', 'swoop'],
     scene: 'sea',
     color: '#e6e9ee',
+    relief: 1,
   },
   bird: {
     blurb: 'Pecks at the ground or hops about.',
     motions: ['nod', 'drop', 'bounce'],
     scene: 'meadow',
     color: '#4fb06a',
+    relief: 1,
   },
   butterfly: {
     blurb: 'Flutters over the grass.',
     motions: ['bounce', 'swoop', 'spin'],
     scene: 'meadow',
     color: '#e0a54f',
+    relief: 1,
   },
   cat: {
     blurb: 'Watches, waits… and pounces.',
     motions: ['drop', 'nod', 'spin'],
     scene: 'meadow',
     color: '#3c3f47',
+    relief: 1,
   },
   dancer: {
     blurb: 'A ballerina turning on her toes.',
@@ -148,12 +158,14 @@ export const FIGURE_INFO: Record<string, FigureInfo> = {
     motions: ['bob', 'bounce', 'spin'],
     scene: 'none',
     color: '#e0a54f',
+    relief: 1,
   },
   rocket: {
     blurb: 'Climbs through the clouds, falls back, tries again.',
     motions: ['drop', 'bob', 'spin'],
     scene: 'sky',
     color: '#c93a2e',
+    relief: 1,
   },
 }
 
@@ -299,6 +311,7 @@ export function composeToy(
     color: info?.color ?? '#e0a54f',
     label: shape.label,
     ...(shapeId === CUSTOM_SHAPE && custom ? { outline: custom.outline } : {}),
+    ...(info?.relief ? { relief: info.relief } : {}),
   })
   const name =
     shapeId === CUSTOM_SHAPE

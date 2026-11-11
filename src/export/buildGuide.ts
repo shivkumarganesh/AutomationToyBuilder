@@ -59,7 +59,7 @@ export interface BuildGuide {
 function groupOf(name: string): PartGroup {
   if (/^(frame-)?(side-|wall-|stage|bottom)/.test(name)) return 'Box'
   if (name.startsWith('prop-')) return 'Scenery'
-  if (/^(figure-|detail-|limb-|axle-|wire-|hinge-stand|body-|stand-|post-|wing-)/.test(name)) return 'Figures'
+  if (/^(figure-|detail-|depth-|limb-|axle-|wire-|hinge-stand|body-|stand-|post-|wing-)/.test(name)) return 'Figures'
   return 'Mechanism'
 }
 
@@ -97,6 +97,7 @@ const LABELS: [RegExp, string][] = [
   [/^wing-/, 'Wing plate'],
   [/^figure-/, 'Figure'],
   [/^detail-/, 'Raised detail plate'],
+  [/^depth-/, 'Depth layer'],
   [/^prop-/, 'Scenery'],
   [/^axle-/, 'Limb axle'],
   [/^wire-/, 'Limb wire crank'],
@@ -427,6 +428,15 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
       else if (ch.kind === 'spin') body.push(`Glue ${what} onto the platform of “${ch.id}”.`)
       else body.push(`Glue ${what} to the tip of the wand of “${ch.id}”.`)
     }
+    if (laser && generateParts(spec).some((p) => p.name.startsWith('depth-')))
+      body.push(
+        'Build up the depth layers before mounting. Each figure plate is scored with the outline of the L1 layer: glue L1 inside that outline, then L2 inside the outline scored on L1, and so on. Do the same on the back with the “back” set, so the figure is rounded on both faces. On a winged creature the layers go on top of the body only.',
+        'Let the stack dry under a weight, then soften the steps with sandpaper if you want a smoother body — or leave them crisp.',
+      )
+    if (!laser && spec.characters.some((c) => c.kind === 'silhouette' && (c.relief ?? 0) > 0))
+      body.push(
+        'Figures with depth print as two halves (“half1” and “half2”), each flat on the bed with its rounded side up. Glue the two flat faces together, edges flush, before mounting.',
+      )
     if (laser && generateParts(spec).some((p) => p.name.startsWith('detail-')))
       body.push(
         'Glue each raised detail plate onto its figure, one on the front and its twin on the back, inside the outline scored on the face.',

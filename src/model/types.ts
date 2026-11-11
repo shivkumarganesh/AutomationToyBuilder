@@ -326,6 +326,13 @@ export interface CharacterSpec {
    * × width, y ∈ [0, 1] × height, base at y = 0, mount at x = 0).
    */
   outline?: { x: number; y: number }[]
+  /**
+   * silhouette and flyer: DEPTH LEVELS added to each face (0–3) — plates
+   * of the same sheet, each a step smaller than the one below, that give
+   * a flat figure a sculpted body. Laser: cut and glued. Print: a smooth
+   * dome. A figure too slender for a level simply gets fewer.
+   */
+  relief?: number
 }
 
 /**

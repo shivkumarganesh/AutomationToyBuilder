@@ -179,7 +179,7 @@ export function simplifyClosed(loop: Point2[], eps: number): Point2[] {
 }
 
 /** One pass of corner cutting: rounds the staircase a pixel trace leaves. */
-function chaikin(loop: Point2[]): Point2[] {
+export function chaikin(loop: Point2[]): Point2[] {
   const out: Point2[] = []
   for (let i = 0; i < loop.length; i++) {
     const a = loop[i]

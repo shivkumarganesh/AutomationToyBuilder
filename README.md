@@ -116,6 +116,27 @@ is one piece with its pin as a finger, crown-gear tooth tabs are ≥ 3 mm with a
 rim outside their mortises. Bought-in stock is limited to dowel (shafts,
 spindles), small pins, wire for the wire-linkage bird, and hinge tape.
 
+## Depth and engraving — flat sheet, rounded toy
+
+Figures and winged creatures carry a **depth** setting (0–3 levels per face).
+
+- **Laser cut:** each level is another plate of the same 3 mm sheet, a step
+  smaller than the one below (`depth-…` parts, one set per face). Every plate
+  is scored with the footprint of whatever is glued onto it and with the
+  engraved detail that ends up on its surface, so lines never run off a plate
+  or get buried under one. Thin tails and fins stay single-thickness; a level
+  that would be too small to cut is simply left out.
+- **3D print:** the same depth becomes a smooth dome. Figures print as two
+  mirrored halves, flat side down, glued back to back; a creature's ridge is
+  part of its body. No supports.
+- **Preview:** engraving is drawn as a burnt score line with a soft scorch,
+  and cut edges are darkened on wood finishes — what you see is what the
+  laser leaves.
+
+The stack is computed once (`src/scene/reliefLayout.ts`, `src/model/relief.ts`)
+and shared by the 3D view, the SVG and the STL; tests check every plate against
+the basswood rules.
+
 ## Roadmap — growing the toy library
 
 Adding a toy = adding a template in `src/model/templates.ts` (plus, if it
