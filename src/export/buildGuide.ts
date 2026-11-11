@@ -4,7 +4,7 @@ import { FIGURE_SHAPES } from '../model/figures'
 import { PROP_SHAPES } from '../model/props'
 import { generateParts, packSheets, pushrodLayers, SHEET_HEIGHT, SHEET_WIDTH } from './svgFlatPack'
 import { buildPrintParts } from './stlExport'
-import { HINGE_GAP } from '../scene/flyerLayout'
+import { HINGE_GAP, STITCH_HOLE } from '../scene/flyerLayout'
 
 /**
  * The build guide: everything a maker needs besides the cut/print file —
@@ -14,8 +14,9 @@ import { HINGE_GAP } from '../scene/flyerLayout'
  */
 
 const HINGE_TAPE = {
-  item: 'Cloth hinge tape (bookbinding or medical tape), about 300 mm',
-  detail: 'Makes the wing hinges: stuck across the gap on the underside of the plates.',
+  item: 'For the wing hinges: cloth tape (bookbinding or medical), about 300 mm — OR thin soft wire (0.4–0.6 mm) or strong thread, about 500 mm',
+  detail:
+    'Tape is stuck across each gap on the underside. Wire or thread is looped through the pairs of small stitch holes beside each joint. Either works; you only need one.',
 }
 
 export type BuildMethod = 'laser' | 'print'
@@ -406,8 +407,11 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
       if (c.kind === 'flyer') {
         body.push(
           `Build ${what}: press the post's lower tab into its stage slot and the body plate onto the upper tab, nose to the front. Check the body sits level, then glue.`,
-          `Lay each wing plate beside the body, ${HINGE_GAP} mm apart (a coin edge makes a good spacer), top face down, and stick hinge tape across every gap on the UNDERSIDE. The wings must flop freely.`,
-          'Round the top of each pushrod with sandpaper. Rest each wing plate on its rod — gravity keeps it there. Do not glue the wings to the rods.',
+          `How the wings connect: every wing plate is HINGED to its neighbour — the inner plate to the body${c.flyer && c.flyer.left.length > 1 ? ', the outer plate to the inner plate' : ''} — with a ${HINGE_GAP} mm gap between them so they can fold. Nothing else holds a wing: it simply rests on top of its pushrod. Choose ONE of the two hinge methods below.`,
+          `Hinge method A — tape (quickest). Turn the body and wing plates upside down on the table and line them up as they will sit, with a ${HINGE_GAP} mm gap at every joint (two coins on edge make a good spacer). Stick a strip of cloth tape along each gap, pressing it onto both plates but NOT down into the gap. Trim the ends flush. Turn it over: each wing should drop under its own weight when you lift and release it.`,
+          `Hinge method B — wire or thread loops (no tape, lasts longer). The small ${STITCH_HOLE} mm holes beside every joint are stitch holes: each hole faces a partner across the gap. With the plates ${HINGE_GAP} mm apart, pass a 40 mm piece of thin soft wire (0.4–0.6 mm) or strong thread down through one hole and up through its partner, then twist or knot the ends underneath, leaving the loop slack enough for the wing to fold both ways. Do every pair. Snip the tails and press them flat.`,
+          'Check each hinge: hold the body level and lift a wing tip about 15 mm. It must fall back the moment you let go. If it sticks, the tape is too tight in the gap or the loop is twisted too tight — loosen it.',
+          'Round the top of each pushrod with sandpaper so it is a smooth dome. Rest each wing plate on its rod — gravity keeps it there. Do not glue or tie the wings to the rods: the rod tip has to slide a little under the wing as it rises.',
         )
         continue
       }
