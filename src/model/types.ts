@@ -291,6 +291,24 @@ export interface CharacterSpec {
   shape?: string
 }
 
+/**
+ * A static scenery plate standing on the stage (waves, hills, a tree).
+ * Props never move and never touch the mechanism: they are cut from the
+ * same sheet as the box and stand in one of two rows — in FRONT of the
+ * figures or BEHIND them — held by tabs dropping into stage slots.
+ */
+export interface PropSpec {
+  id: string
+  /** Shape id from the prop library. */
+  shape: string
+  /** Centre of the prop across the stage, fraction of the box width (0 = left edge). */
+  position: number
+  row: 'front' | 'back'
+  width: number
+  height: number
+  color: string
+}
+
 export interface ExportSettings {
   /** Laser kerf (material burned away), split half per side of the cut. */
   kerf: number
@@ -303,6 +321,8 @@ export interface AutomatonSpec {
   frame: FrameSpec
   mechanism: MechanismSpec
   characters: CharacterSpec[]
+  /** Static scenery on the stage; absent on pre-scenery saves. */
+  props?: PropSpec[]
   export: ExportSettings
 }
 

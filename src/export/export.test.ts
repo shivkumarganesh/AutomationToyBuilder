@@ -37,6 +37,12 @@ describe('SVG flat-pack', () => {
         'cam-petal',
         'figure-figure-a',
         'figure-figure-b',
+        // a laser-only build needs these too: laminated rods + the crank
+        'pushrod-rod-a-layer1',
+        'pushrod-rod-a-layer2',
+        'pushrod-rod-b-layer1',
+        'pushrod-rod-b-layer2',
+        'crank-arm',
       ].sort(),
     )
   })

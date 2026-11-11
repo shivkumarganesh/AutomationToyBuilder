@@ -6,6 +6,9 @@ import { DEFAULT_FIGURE_SHAPE, FIGURE_SHAPES } from '../model/figures'
 import { NumberField } from './NumberField'
 import { ExportPanel } from './ExportPanel'
 import { SavePanel } from './SavePanel'
+import { SimplePanel } from './SimplePanel'
+import { SceneryControls } from './SceneryControls'
+import { useUiStore } from './uiStore'
 
 /** Swap a cam to a different kind, keeping its shaft placement. */
 function convertCam(cam: CamSpec, kind: CamSpec['kind']): CamSpec {
@@ -325,9 +328,31 @@ export function Sidebar() {
   const updateGearTrain = useDesignerStore((s) => s.updateGearTrain)
   const removeGearTrain = useDesignerStore((s) => s.removeGearTrain)
   const full = channelCount(spec) >= MAX_CHANNELS
+  const mode = useUiStore((s) => s.mode)
+  const setMode = useUiStore((s) => s.setMode)
+
+  const modeToggle = (
+    <div className="seg mode-toggle" role="group" aria-label="Editing mode">
+      <button className={mode === 'simple' ? 'on' : ''} onClick={() => setMode('simple')}>
+        Simple
+      </button>
+      <button className={mode === 'advanced' ? 'on' : ''} onClick={() => setMode('advanced')}>
+        Advanced
+      </button>
+    </div>
+  )
+
+  if (mode === 'simple')
+    return (
+      <aside className="sidebar">
+        {modeToggle}
+        <SimplePanel />
+      </aside>
+    )
 
   return (
     <aside className="sidebar">
+      {modeToggle}
       <details className="section" open>
         <summary>Frame &amp; Stage</summary>
         <div className="section-body">
@@ -717,6 +742,13 @@ export function Sidebar() {
             Click an articulated figure in the 3D view to x-ray its body and inspect
             the wire linkage inside.
           </p>
+        </div>
+      </details>
+
+      <details className="section" open>
+        <summary>Scenery (static props)</summary>
+        <div className="section-body">
+          <SceneryControls />
         </div>
       </details>
 

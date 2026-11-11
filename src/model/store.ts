@@ -9,11 +9,14 @@ import type {
   LimbSpec,
   LinkageSpec,
   MechanismSpec,
+  PropSpec,
   PushrodSpec,
   RockerSpec,
   SpinnerSpec,
 } from './types'
 import { DEFAULT_FIGURE_SHAPE, FIGURE_SHAPES } from './figures'
+import { MAX_PROPS, PROP_SHAPES } from './props'
+import { FIGURE_INFO, type MotionId } from './catalog'
 import { loadInitialSpec, saveToLocalStorage } from './persistence'
 
 interface DesignerState {
@@ -74,6 +77,25 @@ interface DesignerState {
   addLimb: (characterId: string) => void
   updateLimb: (characterId: string, limbId: string, patch: Partial<LimbSpec>) => void
   removeLimb: (characterId: string, limbId: string) => void
+
+  /** Rename the design. */
+  setName: (name: string) => void
+  /**
+   * Add a library figure moving in a named way: installs the whole unit
+   * (mechanism + channel + silhouette figure) in the widest free stretch
+   * of shaft. Returns false when the channel limit is reached.
+   */
+  addFigureWithMotion: (shapeId: string, motion: MotionId) => boolean
+  /** Add a scenery plate from the prop library in its natural row. */
+  addProp: (shapeId: string) => void
+  updateProp: (id: string, patch: Partial<PropSpec>) => void
+  removeProp: (id: string) => void
+
+  /** Undo/redo stacks of whole designs (most recent last / first). */
+  past: AutomatonSpec[]
+  future: AutomatonSpec[]
+  undo: () => void
+  redo: () => void
 }
 
 export const MAX_LIMBS = 3
@@ -151,7 +173,7 @@ const TWO_PI = Math.PI * 2
 // small, and 840 divides evenly by every ratio the UI can produce.
 const CRANK_WRAP = TWO_PI * 840
 
-export const useDesignerStore = create<DesignerState>((set) => ({
+export const useDesignerStore = create<DesignerState>((set, get) => ({
   spec: loadInitialSpec(),
   crankAngle: 0,
   isCranking: true,
@@ -604,7 +626,141 @@ export const useDesignerStore = create<DesignerState>((set) => ({
         ),
       },
     })),
+
+  setName: (name) =>
+    set((s) => {
+      const clean = name.trim().slice(0, 60)
+      return clean ? { spec: { ...s.spec, name: clean } } : {}
+    }),
+
+  addFigureWithMotion: (shapeId, motion) => {
+    const shape = FIGURE_SHAPES[shapeId]
+    if (!shape || channelCount(get().spec) >= MAX_CHANNELS) return false
+    const before = new Set(get().spec.characters.map((c) => c.id))
+    const camsBefore = new Set(get().spec.mechanism.cams.map((c) => c.id))
+    // reuse the proven unit builders, then dress the new unit
+    if (motion === 'nod') get().addRocker()
+    else if (motion === 'spin') get().addSpinner()
+    else if (motion === 'swoop') get().addLinkage()
+    else get().addCam()
+    set((s) => {
+      const fresh = s.spec.characters.find((c) => !before.has(c.id))
+      if (!fresh) return {}
+      const newCam = s.spec.mechanism.cams.find((c) => !camsBefore.has(c.id))
+      const base = newCam && {
+        id: newCam.id,
+        position: newCam.position,
+        phaseDeg: newCam.phaseDeg,
+        thickness: newCam.thickness,
+      }
+      const cams = s.spec.mechanism.cams.map((c): CamSpec => {
+        if (!base || c.id !== base.id) return c
+        if (motion === 'bounce') return { ...base, kind: 'petal', baseRadius: 16, lift: 8, lobes: 3 }
+        if (motion === 'drop') return { ...base, kind: 'snail', baseRadius: 14, lift: 12 }
+        return c
+      })
+      return {
+        spec: {
+          ...s.spec,
+          mechanism: { ...s.spec.mechanism, cams },
+          characters: s.spec.characters.map((c) =>
+            c.id === fresh.id
+              ? {
+                  ...c,
+                  kind: 'silhouette' as const,
+                  shape: shapeId,
+                  width: shape.defaultWidth,
+                  height: shape.defaultHeight,
+                  depth: 14,
+                  color: FIGURE_INFO[shapeId]?.color ?? c.color,
+                  label: shape.label,
+                }
+              : c,
+          ),
+        },
+      }
+    })
+    return true
+  },
+
+  addProp: (shapeId) =>
+    set((s) => {
+      const shape = PROP_SHAPES[shapeId]
+      const props = s.spec.props ?? []
+      if (!shape || props.length >= MAX_PROPS) return {}
+      let n = 1
+      while (props.some((p) => p.id === `prop-${n}`)) n++
+      // first free spot in the prop's row, scanning out from the centre
+      const sameRow = props.filter((p) => p.row === shape.defaultRow)
+      const spots = [0.5, 0.25, 0.75, 0.15, 0.85, 0.38, 0.62]
+      const position =
+        spots.find((x) => sameRow.every((p) => Math.abs(p.position - x) > 0.08)) ?? 0.5
+      const prop: PropSpec = {
+        id: `prop-${n}`,
+        shape: shapeId,
+        position,
+        row: shape.defaultRow,
+        width: Math.min(shape.defaultWidth, s.spec.frame.width - 20),
+        height: shape.defaultHeight,
+        color: shape.defaultColor,
+      }
+      return { spec: { ...s.spec, props: [...props, prop] } }
+    }),
+
+  updateProp: (id, patch) =>
+    set((s) => ({
+      spec: {
+        ...s.spec,
+        props: (s.spec.props ?? []).map((p) => (p.id === id ? { ...p, ...patch } : p)),
+      },
+    })),
+
+  removeProp: (id) =>
+    set((s) => ({
+      spec: { ...s.spec, props: (s.spec.props ?? []).filter((p) => p.id !== id) },
+    })),
+
+  past: [],
+  future: [],
+
+  undo: () => {
+    const { past, future, spec } = get()
+    if (past.length === 0) return
+    historyMuted = true
+    set({ spec: past[past.length - 1], past: past.slice(0, -1), future: [spec, ...future] })
+    historyMuted = false
+  },
+
+  redo: () => {
+    const { past, future, spec } = get()
+    if (future.length === 0) return
+    historyMuted = true
+    set({ spec: future[0], past: [...past, spec], future: future.slice(1) })
+    historyMuted = false
+  },
 }))
+
+// Undo history: every design change pushes the PREVIOUS design, except
+// that a burst of changes (a slider drag) collapses into one step.
+let historyMuted = false
+let lastChangeAt = 0
+const HISTORY_LIMIT = 60
+const HISTORY_BURST_MS = 600
+/** Tests: make the next change start a fresh undo step. */
+export function breakHistoryBurst() {
+  lastChangeAt = 0
+}
+useDesignerStore.subscribe((state, prev) => {
+  if (state.spec === prev.spec || historyMuted) return
+  const now = Date.now()
+  const burst = now - lastChangeAt < HISTORY_BURST_MS
+  lastChangeAt = now
+  if (burst && state.future.length === 0) return
+  useDesignerStore.setState({
+    past: burst ? state.past : [...state.past, prev.spec].slice(-HISTORY_LIMIT),
+    future: [],
+  })
+})
 
 // Auto-save: any design change lands in localStorage after a short debounce,
 // so a reload (without a share link) resumes where the user left off.
