@@ -929,6 +929,8 @@ const fish_head: FigureShape = {
   ],
 }
 
+import { CHRISTMAS_FIGURES } from './christmas'
+
 export const FIGURE_SHAPES: Record<string, FigureShape> = {
   dancer,
   bird,
@@ -944,6 +946,7 @@ export const FIGURE_SHAPES: Record<string, FigureShape> = {
   'fish-rear': fish_rear,
   'fish-front': fish_front,
   'fish-head': fish_head,
+  ...Object.fromEntries(CHRISTMAS_FIGURES.map((f) => [f.id, f])),
 }
 
 /** Shapes a user picks as a whole figure (segments excluded). */

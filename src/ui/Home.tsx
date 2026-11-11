@@ -7,12 +7,14 @@ import {
   FIGURE_INFO,
   MOTIONS,
   ARTICULATED_TEMPLATES,
+  SIMPLE_TEMPLATES,
   TEMPLATE_INFO,
   type MotionId,
 } from '../model/catalog'
 import { useUiStore } from './uiStore'
 import { CustomThumb, Difficulty, FigureThumb, MotionIcon } from './Thumbs'
 import { ShapeStudio, type StudioResult } from './ShapeStudio'
+import { SceneBuilder } from './SceneBuilder'
 
 /** Gallery order: sea creatures, land, then the rest. */
 const FIGURE_ORDER = [
@@ -26,6 +28,10 @@ const FIGURE_ORDER = [
   'cat',
   'dancer',
   'rocket',
+  'reindeer',
+  'snowman',
+  'xmastree',
+  'sleigh',
 ]
 
 /**
@@ -110,6 +116,16 @@ export function Home() {
       </section>
 
       <section>
+        <h3 className="home-title">Easiest builds — cams and pushrods only, with a Christmas set</h3>
+        <div className="card-grid toys">{SIMPLE_TEMPLATES.map((key) => toyCard(key))}</div>
+      </section>
+
+      <section>
+        <h3 className="home-title">Build a scene — line up a cast and bring it to life</h3>
+        <SceneBuilder onBuild={open} />
+      </section>
+
+      <section>
         <h3 className="home-title">Articulated creatures — wings and bodies that really move</h3>
         <div className="card-grid toys">{ARTICULATED_TEMPLATES.map((key) => toyCard(key))}</div>
       </section>
@@ -145,7 +161,7 @@ export function Home() {
         <h3 className="home-title">More ready-made toys</h3>
         <div className="card-grid toys">
           {Object.keys(templates)
-            .filter((key) => !ARTICULATED_TEMPLATES.includes(key))
+            .filter((key) => !ARTICULATED_TEMPLATES.includes(key) && !SIMPLE_TEMPLATES.includes(key))
             .map((key) => toyCard(key))}
         </div>
       </section>

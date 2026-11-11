@@ -1405,3 +1405,54 @@ button.ghost {
 .ghost-link:hover {
   background: rgba(224, 165, 79, 0.12);
 }
+
+/* ---- scene builder on the home page ---- */
+.scene-builder {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.cast-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: stretch;
+  min-height: 118px;
+  margin: 10px 0;
+}
+.cast-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  position: relative;
+}
+.cast-slot select {
+  font-size: 12px;
+}
+.cast-slot .icon-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}
+.cast-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  opacity: 0.7;
+  font-size: 13px;
+}
+.scene-builder .builder-foot {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}

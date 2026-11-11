@@ -1,4 +1,5 @@
 import type { Point2 } from './figures'
+import { CHRISTMAS_PROPS } from './christmas'
 
 /**
  * Curated scenery library: static flat plates that stand on the stage
@@ -246,7 +247,14 @@ const cloud: PropShape = {
 /** The stage has two rows; more than a handful of plates just hides the figures. */
 export const MAX_PROPS = 6
 
-export const PROP_SHAPES: Record<string, PropShape> = { waves, grass, hills, tree, cloud }
+export const PROP_SHAPES: Record<string, PropShape> = {
+  waves,
+  grass,
+  hills,
+  tree,
+  cloud,
+  ...Object.fromEntries(CHRISTMAS_PROPS.map((p) => [p.id, p])),
+}
 
 /** Outline scaled to real dimensions (mm), base at y = 0. */
 export function propOutline(shapeId: string, width: number, height: number): Point2[] {

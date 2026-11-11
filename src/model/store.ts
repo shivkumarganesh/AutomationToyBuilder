@@ -16,7 +16,7 @@ import type {
 } from './types'
 import { DEFAULT_FIGURE_SHAPE, FIGURE_SHAPES } from './figures'
 import { MAX_PROPS, PROP_SHAPES } from './props'
-import { FIGURE_INFO, type MotionId } from './catalog'
+import { FIGURE_INFO, sceneProps, type MotionId, type SceneId } from './catalog'
 import { loadInitialSpec, saveToLocalStorage } from './persistence'
 
 interface DesignerState {
@@ -89,6 +89,8 @@ interface DesignerState {
   /** Add a scenery plate from the prop library in its natural row. */
   addProp: (shapeId: string) => void
   updateProp: (id: string, patch: Partial<PropSpec>) => void
+  /** Replace all scenery with a ready-made set, fitted to this stage. */
+  setScene: (scene: SceneId) => void
   removeProp: (id: string) => void
 
   /** Undo/redo stacks of whole designs (most recent last / first). */
@@ -714,6 +716,16 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
         color: shape.defaultColor,
       }
       return { spec: { ...s.spec, props: [...props, prop] } }
+    }),
+
+  setScene: (scene) =>
+    set((s) => {
+      const w = s.spec.frame.width
+      const props = sceneProps(scene).map((p) => ({
+        ...p,
+        width: Math.min(Math.round(p.width * Math.max(1, w / 160)), w - 20),
+      }))
+      return { spec: { ...s.spec, props } }
     }),
 
   updateProp: (id, patch) =>

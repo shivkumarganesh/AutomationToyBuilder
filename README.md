@@ -116,6 +116,24 @@ is one piece with its pin as a finger, crown-gear tooth tabs are ≥ 3 mm with a
 rim outside their mortises. Bought-in stock is limited to dowel (shafts,
 spindles), small pins, wire for the wire-linkage bird, and hinge tape.
 
+## Scenes — line up a cast, lay out the stage
+
+- **Build a scene** (home page): click figures to line them up, give each a
+  motion (bob, bounce, or climb & drop), choose the scenery. `composeScene`
+  puts every figure on its own cam and pushrod on one straight shaft, spaces
+  them so neighbours never touch, staggers them round the turn so the row moves
+  like a wave, and grows the box to fit — up to five figures on a 300 mm sheet.
+- **Stage layout** (design step, both interfaces): the stage seen from above.
+  Drag figures along the box, drag scenery sideways or between the front and
+  back rows (arrow keys work too). Overlapping figures and scenery that hits a
+  slot are flagged as you drag. One click swaps in a whole scenery set.
+- **Easiest builds**: Leaping Reindeer, Sleigh Ride, Winter Friends and Seaside
+  use nothing but cams and pushrods.
+- **Christmas set** (`src/model/christmas.ts`): reindeer, snowman, Christmas
+  tree and sleigh figures; pine, snow drift, cabin, star and presents scenery.
+  Shapes are drawn in millimetres at their default size so every web can be
+  read against the basswood rules, and all pass the audit.
+
 ## Depth and engraving — flat sheet, rounded toy
 
 Figures and winged creatures carry a **depth** setting (0–3 levels per face).

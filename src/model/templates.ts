@@ -1,4 +1,5 @@
 import type { AutomatonSpec } from './types'
+import { composeScene } from './catalog'
 
 /**
  * Toy template registry. Each template is pure data — adding a new toy to
@@ -882,6 +883,56 @@ export const swimmingFish: AutomatonSpec = (() => {
   }
 })()
 
+/**
+ * The simple scenes: casts on one straight shaft, cams and pushrods
+ * only. Laid out by the same composer the scene builder uses, then
+ * dressed with a little extra scenery.
+ */
+const withProps = (spec: AutomatonSpec, extra: NonNullable<AutomatonSpec['props']>): AutomatonSpec => ({
+  ...spec,
+  props: [...(spec.props ?? []), ...extra],
+})
+
+export const leapingReindeer = composeScene('Leaping Reindeer', [{ shape: 'reindeer', motion: 'bounce' }], 'winter')
+
+export const sleighRide = withProps(
+  composeScene(
+    'Sleigh Ride',
+    [
+      { shape: 'sleigh', motion: 'bob', phaseDeg: 0 },
+      { shape: 'reindeer', motion: 'bob', phaseDeg: 120 },
+      { shape: 'reindeer', motion: 'bob', phaseDeg: 240 },
+    ],
+    'winter',
+  ),
+  [{ id: 'prop-star', shape: 'star', position: 0.5, row: 'back', width: 26, height: 70, color: '#f2c744' }],
+)
+
+export const winterFriends = withProps(
+  composeScene(
+    'Winter Friends',
+    [
+      { shape: 'snowman', motion: 'bob', phaseDeg: 0 },
+      { shape: 'xmastree', motion: 'bounce', phaseDeg: 60 },
+    ],
+    'winter',
+  ),
+  [
+    { id: 'prop-cabin', shape: 'cabin', position: 0.5, row: 'back', width: 44, height: 38, color: '#b5654a' },
+    { id: 'prop-gifts', shape: 'gifts', position: 0.8, row: 'front', width: 26, height: 23, color: '#c93a2e' },
+  ],
+)
+
+export const seaside = composeScene(
+  'Seaside',
+  [
+    { shape: 'whale', motion: 'bob' },
+    { shape: 'fish', motion: 'bounce' },
+    { shape: 'sailboat', motion: 'bob' },
+  ],
+  'sea',
+)
+
 export const templates: Record<string, AutomatonSpec> = {
   simplest: simplestAutomaton,
   woodpecker: snailWoodpecker,
@@ -895,4 +946,8 @@ export const templates: Record<string, AutomatonSpec> = {
   manta: mantaRay,
   dragon,
   fish: swimmingFish,
+  reindeer: leapingReindeer,
+  sleighride: sleighRide,
+  winterfriends: winterFriends,
+  seaside,
 }
