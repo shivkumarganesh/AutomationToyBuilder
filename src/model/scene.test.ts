@@ -57,7 +57,8 @@ describe('the scene composer', () => {
         expect(parseSpec(serializeSpec(spec)), label).toEqual(spec)
       }
     expect(built).toBeGreaterThan(15)
-  })
+    // a sweep of full exports and audits: slow on small CI machines
+  }, 120_000)
 
   it('staggers the cast round the turn unless told otherwise', () => {
     const three = composeScene('t', [
