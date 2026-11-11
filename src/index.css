@@ -1226,3 +1226,55 @@ button.ghost {
   stroke: #2f5fa8;
   stroke-width: 0.35;
 }
+
+/* draw-the-motion editor */
+.motion-editor svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  touch-action: none;
+  user-select: none;
+}
+
+.motion-editor .grid {
+  stroke: var(--border);
+  stroke-width: 0.6;
+}
+
+.motion-editor .axis {
+  fill: var(--text-dim);
+  font-size: 8px;
+}
+
+.motion-editor .drawn {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+}
+
+.motion-editor .actual {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.motion-editor .handle {
+  fill: var(--accent);
+  stroke: #1a1408;
+  stroke-width: 1.5;
+  cursor: ns-resize;
+}
+
+.motion-editor .handle:focus-visible {
+  outline: none;
+  stroke: var(--accent-2);
+  stroke-width: 2.5;
+}
+
+.chip.plain {
+  padding: 3px 10px;
+}

@@ -32,7 +32,60 @@ export function camRadius(cam: CamSpec, phi: number): number {
       const t = cam.shaft === 'lay' ? a / TWO_PI : 1 - a / TWO_PI
       return baseRadius + lift * t
     }
+    case 'custom': {
+      // The follower sits on top of the cam (local angle 90° at crank 0).
+      // After the crank turns by θ the point under it is the one drawn at
+      // 90° − θ, so the height wanted at crank angle θ goes there. The
+      // counter-rotating layshaft plays the profile the other way round.
+      const theta = cam.shaft === 'lay' ? a - Math.PI / 2 : Math.PI / 2 - a
+      return cam.baseRadius + drawnLift(cam.lifts, theta)
+    }
   }
+}
+
+/**
+ * The drawn motion as a smooth periodic curve: height (mm) wanted at
+ * crank angle theta, through the control heights (closed Catmull-Rom,
+ * never below zero).
+ */
+export function drawnLift(lifts: number[], theta: number): number {
+  const n = lifts.length
+  const u = ((((theta % TWO_PI) + TWO_PI) % TWO_PI) / TWO_PI) * n
+  const i = Math.floor(u) % n
+  const t = u - Math.floor(u)
+  const p0 = lifts[(i - 1 + n) % n]
+  const p1 = lifts[i]
+  const p2 = lifts[(i + 1) % n]
+  const p3 = lifts[(i + 2) % n]
+  const v =
+    0.5 *
+    (2 * p1 +
+      (-p0 + p2) * t +
+      (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t +
+      (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t)
+  return Math.max(0, v)
+}
+
+/** Steepest climb a flat follower will ride without jamming (degrees). */
+export const MAX_PRESSURE_ANGLE = 38
+
+/**
+ * The steepest CLIMB of a drawn motion, as a pressure angle in degrees:
+ * atan(rise per radian / radius). Falls are free — a follower can drop
+ * off a cliff — but a climb steeper than MAX_PRESSURE_ANGLE pushes the
+ * rod sideways instead of up, and the crank jams.
+ */
+export function steepestClimb(cam: Extract<CamSpec, { kind: 'custom' }>): number {
+  let worst = 0
+  const N = 720
+  for (let k = 0; k < N; k++) {
+    const th = (k / N) * TWO_PI
+    const s0 = drawnLift(cam.lifts, th)
+    const s1 = drawnLift(cam.lifts, th + TWO_PI / N)
+    const slope = (s1 - s0) / (TWO_PI / N)
+    if (slope > 0) worst = Math.max(worst, Math.atan(slope / (cam.baseRadius + s0)))
+  }
+  return (worst * 180) / Math.PI
 }
 
 export interface Point2 {

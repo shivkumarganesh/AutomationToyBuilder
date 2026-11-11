@@ -8,6 +8,7 @@ import { buildGuide, guideHtml, type PartGroup } from '../export/buildGuide'
 import { BASSWOOD, basswoodAudit } from '../export/basswood'
 import { channelSignals } from '../kinematics/channels'
 import { flyerIssues } from '../scene/flyerLayout'
+import { drawnCamIssues } from '../kinematics/drawnMotion'
 import { serializeSpec, shareUrl } from '../model/persistence'
 import { downloadFile } from '../export/download'
 import { NumberField } from './NumberField'
@@ -89,9 +90,14 @@ export function MakeView() {
   const audit = useMemo(() => (method === 'laser' ? basswoodAudit(spec) : []), [spec, method])
   const motionIssues = useMemo(() => {
     const signals = channelSignals(spec)
-    return spec.characters.flatMap((c) =>
-      c.kind === 'flyer' ? flyerIssues(spec, c, signals).map((m) => `${c.label}: ${m}`) : [],
-    )
+    return [
+      ...spec.characters.flatMap((c) =>
+        c.kind === 'flyer' ? flyerIssues(spec, c, signals).map((m) => `${c.label}: ${m}`) : [],
+      ),
+      ...spec.mechanism.cams.flatMap((cam) =>
+        cam.kind === 'custom' ? drawnCamIssues(cam).map((m) => `${cam.id}: ${m}`) : [],
+      ),
+    ]
   }, [spec])
   const slug = spec.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
   const partCount = guide.parts.reduce((n, p) => n + p.qty, 0)

@@ -78,6 +78,16 @@ function parseCam(raw: unknown, i: number, hasGearTrain: boolean): CamSpec {
         baseRadius: num(c.baseRadius, `cam[${i}].baseRadius`, 5, 60),
         lift: num(c.lift, `cam[${i}].lift`, 0.5, 40),
       }
+    case 'custom': {
+      if (!Array.isArray(c.lifts) || c.lifts.length < 6 || c.lifts.length > 36)
+        fail(`cam[${i}].lifts must carry 6–36 heights`)
+      return {
+        ...base,
+        kind: 'custom',
+        baseRadius: num(c.baseRadius, `cam[${i}].baseRadius`, 5, 60),
+        lifts: c.lifts.map((v, j) => num(v, `cam[${i}].lifts[${j}]`, 0, 40)),
+      }
+    }
     default:
       fail(`cam[${i}].kind unknown`)
   }

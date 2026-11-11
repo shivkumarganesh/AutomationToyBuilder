@@ -1,11 +1,13 @@
 import type { CamSpec, CharacterSpec, LimbKind } from '../model/types'
-import { gearRatio, layshaftY, spinnerRatio } from '../model/types'
+import { camAngularRate, gearRatio, layshaftY, spinnerRatio } from '../model/types'
 import { channelCount, MAX_CHANNELS, MAX_LIMBS, useDesignerStore } from '../model/store'
 import { grashofOk } from '../kinematics/linkage'
 import { channelSignals } from '../kinematics/channels'
 import { flyerIssues } from '../scene/flyerLayout'
 import { DEFAULT_FIGURE_SHAPE, PICKABLE_FIGURES } from '../model/figures'
 import { NumberField } from './NumberField'
+import { MotionEditor } from './MotionEditor'
+import { MOTION_PRESETS, presetLifts } from '../kinematics/drawnMotion'
 import { ExportPanel } from './ExportPanel'
 import { SavePanel } from './SavePanel'
 import { SimplePanel } from './SimplePanel'
@@ -27,6 +29,8 @@ function convertCam(cam: CamSpec, kind: CamSpec['kind']): CamSpec {
       return { ...base, kind, baseRadius: 16, lift: 8, lobes: 4 }
     case 'snail':
       return { ...base, kind, baseRadius: 14, lift: 10 }
+    case 'custom':
+      return { ...base, kind, baseRadius: 16, lifts: presetLifts(MOTION_PRESETS[0], 10) }
   }
 }
 
@@ -35,6 +39,11 @@ function CamControls({ cam, removable }: { cam: CamSpec; removable: boolean }) {
   const removeCam = useDesignerStore((s) => s.removeCam)
   const hasGearTrain = useDesignerStore((s) => s.spec.mechanism.gearTrain !== undefined)
   const replaceCam = (next: CamSpec) => updateCam(cam.id, next)
+  const mech = useDesignerStore((s) => s.spec.mechanism)
+  const followerPad =
+    mech.pushrods.find((r) => r.camId === cam.id)?.padWidth ??
+    mech.rockers.find((r) => r.camId === cam.id)?.padWidth ??
+    16
   return (
     <>
       <div className="subhead">
@@ -47,6 +56,7 @@ function CamControls({ cam, removable }: { cam: CamSpec; removable: boolean }) {
           <option value="eccentric">Eccentric</option>
           <option value="petal">Petal</option>
           <option value="snail">Snail</option>
+          <option value="custom">Drawn motion</option>
         </select>
         {hasGearTrain && (
           <select
@@ -112,6 +122,14 @@ function CamControls({ cam, removable }: { cam: CamSpec; removable: boolean }) {
             onChange={(v) => updateCam(cam.id, { lobes: v })}
           />
         </>
+      )}
+      {cam.kind === 'custom' && (
+        <MotionEditor
+          cam={cam}
+          padWidth={followerPad}
+          rate={camAngularRate(mech, cam)}
+          onChange={(patch) => updateCam(cam.id, patch)}
+        />
       )}
       {cam.kind === 'snail' && (
         <>

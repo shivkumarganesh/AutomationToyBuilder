@@ -10,6 +10,7 @@ const CAM_COLORS: Record<CamSpec['kind'], string> = {
   eccentric: '#e0b64f',
   petal: '#4fb06a',
   snail: '#b04f9e',
+  custom: '#4fa9c9',
 }
 
 /**

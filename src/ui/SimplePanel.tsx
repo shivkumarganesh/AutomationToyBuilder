@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { AutomatonSpec, CamSpec, CharacterSpec, OutputChannel } from '../model/types'
-import { outputChannels } from '../model/types'
+import { camAngularRate, outputChannels } from '../model/types'
 import { channelCount, MAX_CHANNELS, useDesignerStore } from '../model/store'
 import { FIGURE_SHAPES, PICKABLE_FIGURES } from '../model/figures'
 import { FIGURE_INFO, MOTIONS, type MotionId } from '../model/catalog'
@@ -8,6 +8,8 @@ import { grashofOk } from '../kinematics/linkage'
 import { channelSignals } from '../kinematics/channels'
 import { flyerIssues } from '../scene/flyerLayout'
 import { NumberField } from './NumberField'
+import { MotionEditor } from './MotionEditor'
+import { drawnFrom } from '../kinematics/drawnMotion'
 import { SceneryControls } from './SceneryControls'
 import { FigureThumb, MotionIcon } from './Thumbs'
 import { useUiStore } from './uiStore'
@@ -41,6 +43,7 @@ function FigureCard({ ch, spec }: { ch: CharacterSpec; spec: AutomatonSpec }) {
   const [pickShape, setPickShape] = useState(false)
   if (!channel) return null
   const motion = motionOf(channel)
+  const drawn = (channel.kind === 'lift' || channel.kind === 'tilt') && channel.cam.kind === 'custom'
   const shared =
     spec.characters.some((c) => c.id !== ch.id && c.channelId === ch.channelId) ||
     spec.characters.some((c) => c.id !== ch.id && (c.limbs ?? []).some((l) => l.channelId === ch.channelId))
@@ -134,26 +137,47 @@ function FigureCard({ ch, spec }: { ch: CharacterSpec; spec: AutomatonSpec }) {
       <div className="motion-line">
         <MotionIcon motion={motion} size={38} />
         <div>
-          <b>{MOTIONS[motion].label}</b>
-          <span>{MOTIONS[motion].mechanism}</span>
+          <b>{drawn ? 'Your own motion' : MOTIONS[motion].label}</b>
+          <span>{drawn ? 'A cam shaped from the curve you draw' : MOTIONS[motion].mechanism}</span>
         </div>
       </div>
 
       {channel.kind === 'lift' && (
-        <div className="seg" role="group" aria-label="Motion feel">
+        <div className="seg wrap" role="group" aria-label="Motion feel">
           {(['bob', 'bounce', 'drop'] as MotionId[]).map((m) => (
             <button
               key={m}
-              className={motion === m ? 'on' : ''}
+              className={!drawn && motion === m ? 'on' : ''}
               onClick={() => s.updateCam(channel.cam.id, camFor(channel.cam, m))}
             >
               {MOTIONS[m].label}
             </button>
           ))}
+          <button
+            className={drawn ? 'on' : ''}
+            title="Draw exactly how the figure should move"
+            onClick={() =>
+              s.updateCam(
+                channel.cam.id,
+                drawnFrom(channel.cam, channel.pushrod.padWidth, camAngularRate(spec.mechanism, channel.cam)),
+              )
+            }
+          >
+            ✎ Draw it
+          </button>
         </div>
+      )}
+      {channel.kind === 'lift' && channel.cam.kind === 'custom' && (
+        <MotionEditor
+          cam={channel.cam}
+          padWidth={channel.pushrod.padWidth}
+          rate={camAngularRate(spec.mechanism, channel.cam)}
+          onChange={(patch) => s.updateCam(channel.cam.id, patch)}
+        />
       )}
 
       {(channel.kind === 'lift' || channel.kind === 'tilt') &&
+        channel.cam.kind !== 'custom' &&
         (channel.cam.kind === 'eccentric' ? (
           <NumberField
             label={channel.kind === 'lift' ? 'How far it travels' : 'How far it rocks'}
