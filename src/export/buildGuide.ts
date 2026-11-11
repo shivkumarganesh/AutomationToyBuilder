@@ -58,7 +58,7 @@ export interface BuildGuide {
 function groupOf(name: string): PartGroup {
   if (/^(frame-)?(side-|wall-|stage|bottom)/.test(name)) return 'Box'
   if (name.startsWith('prop-')) return 'Scenery'
-  if (/^(figure-|limb-|axle-|wire-|hinge-stand|body-|stand-|post-|wing-)/.test(name)) return 'Figures'
+  if (/^(figure-|detail-|limb-|axle-|wire-|hinge-stand|body-|stand-|post-|wing-)/.test(name)) return 'Figures'
   return 'Mechanism'
 }
 
@@ -95,6 +95,7 @@ const LABELS: [RegExp, string][] = [
   [/^post-/, 'Body post'],
   [/^wing-/, 'Wing plate'],
   [/^figure-/, 'Figure'],
+  [/^detail-/, 'Raised detail plate'],
   [/^prop-/, 'Scenery'],
   [/^axle-/, 'Limb axle'],
   [/^wire-/, 'Limb wire crank'],
@@ -277,7 +278,7 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
       ? {
           title: 'Cut the parts',
           body: [
-            `Load ${t} mm basswood and cut the SVG one sheet at a time: red lines are cuts, blue text is engraved labels (or skip them), green rectangles mark each sheet's edge and are not cut.`,
+            `Load ${t} mm basswood and cut the SVG one sheet at a time. Red lines cut through. Blue is scored lightly on the surface at low power: the detail lines on the figures and the part labels. Green rectangles mark each sheet's edge and are not cut.`,
             'Lay parts with long thin shapes along the grain where you can — basswood is strongest that way.',
             `The file is compensated for a ${spec.export.kerf} mm kerf. If joints come out loose or too tight, change the kerf setting and re-export.`,
             'Lightly sand the scorched edges. Keep the small parts together in a tray.',
@@ -422,6 +423,10 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
       else if (ch.kind === 'spin') body.push(`Glue ${what} onto the platform of “${ch.id}”.`)
       else body.push(`Glue ${what} to the tip of the wand of “${ch.id}”.`)
     }
+    if (laser && generateParts(spec).some((p) => p.name.startsWith('detail-')))
+      body.push(
+        'Glue each raised detail plate onto its figure, one on the front and its twin on the back, inside the outline scored on the face.',
+      )
     steps.push({ title: 'Mount the figures', body })
   }
 

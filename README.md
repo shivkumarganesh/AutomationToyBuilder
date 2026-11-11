@@ -142,5 +142,12 @@ introduces a new mechanism, a profile function in `src/kinematics/`):
   **segmented bodies** (figure shapes with `partOf`), each segment on its own
   phase-lagged cam — the Swimming Fish
 
+- ~~a scene worth looking at~~ — shipped: workbench, wood grain, shadows,
+  finishes (painted / natural / walnut), a crank you grab and turn, and
+  synthesised knocks driven by the real follower motion
+- ~~detail~~ — shipped: figures and flyers carry ENGRAVED lines (eyes, gills,
+  wing ribs — scored, never cut) and raised DETAIL PLATES glued on each face
+  (a fin, a wing); printed figures get the plates as relief
+
 Next: segmented swimmers (phase-lagged body sections), a motion-first cam
 designer (draw the displacement curve, get the cam), per-part STL files.

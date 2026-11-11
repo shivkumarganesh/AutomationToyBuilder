@@ -18,14 +18,21 @@ import {
   LINK_PIN_DIAMETER,
   wandPlaneCrossing,
 } from '../kinematics/linkage'
-import { DEFAULT_FIGURE_SHAPE, figureOutline } from '../model/figures'
+import {
+  DEFAULT_FIGURE_SHAPE,
+  figureEngraving,
+  figureLayers,
+  figureOutline,
+} from '../model/figures'
 import { propFitsStage, propPlateOutline, propStageSlots } from '../scene/propLayout'
 import {
   FLYER_TAB_WIDTH,
+  flyerBodyEngraving,
   flyerBodyOutline,
   flyerGeometry,
   flyerPostHeight,
   flyerPostOutline,
+  flyerWingEngraving,
   flyerWingPlate,
 } from '../scene/flyerLayout'
 import {
@@ -62,6 +69,8 @@ export interface Part {
   name: string
   outline: Path
   holes: Path[]
+  /** Open polylines SCORED on the face (detail, glue-placement marks) — never cut through. */
+  engrave?: Path[]
   width: number
   height: number
 }
@@ -760,7 +769,7 @@ function characterParts(
     const geo = flyerGeometry(spec, c, signals)
     if (!geo) return out
     const t = spec.frame.materialThickness
-    const place = (name: string, raw: Path, holes: Path[] = []): Part => {
+    const place = (name: string, raw: Path, holes: Path[] = [], engrave: Path[] = []): Part => {
       const b0 = bounds(raw)
       const cx = (b0.minX + b0.maxX) / 2
       const cy = (b0.minY + b0.maxY) / 2
@@ -773,20 +782,30 @@ function characterParts(
         name,
         outline: translate(grown, -b.minX, -b.minY),
         holes: holes.map((h) => translate(h, -b.minX, -b.minY)),
+        ...(engrave.length > 0
+          ? { engrave: engrave.map((l) => translate(l, -b.minX, -b.minY)) }
+          : {}),
         width: b.maxX - b.minX,
         height: b.maxY - b.minY,
       }
     }
     // body: the post's top tab passes through a slot at the wing-root middle
     out.push(
-      place(`body-${c.id}`, flyerBodyOutline(c), [rect(0, 0, t - kerf, FLYER_TAB_WIDTH - kerf)]),
+      place(
+        `body-${c.id}`,
+        flyerBodyOutline(c),
+        [rect(0, 0, t - kerf, FLYER_TAB_WIDTH - kerf)],
+        flyerBodyEngraving(c),
+      ),
     )
     out.push(place(`post-${c.id}`, flyerPostOutline(flyerPostHeight(spec, geo), t)))
     for (const side of [geo.left, geo.right]) {
       const tag = side.sign < 0 ? 'L' : 'R'
       side.hinges.forEach((_, i) => {
-        const plate = flyerWingPlate(c, side, i).map((pt) => ({ x: side.sign * pt.x, y: pt.y }))
-        out.push(place(`wing-${c.id}-${tag}${i + 1}`, plate))
+        const flip = (pt: Point2) => ({ x: side.sign * pt.x, y: pt.y })
+        const plate = flyerWingPlate(c, side, i).map(flip)
+        const ribs = flyerWingEngraving(c, side, i).map((l) => l.map(flip))
+        out.push(place(`wing-${c.id}-${tag}${i + 1}`, plate, [], ribs))
       })
     }
     return out
@@ -800,12 +819,34 @@ function characterParts(
       kerf / 2,
     ).map((pt) => ({ x: pt.x, y: pt.y + c.height / 2 }))
     const b = bounds(grown)
+    const shapeId = c.shape ?? DEFAULT_FIGURE_SHAPE
+    const layers = figureLayers(shapeId, c.width, c.height)
+    // scored on the face: the detail lines, plus the footprint of every
+    // glued-on plate so it is obvious where each one goes
+    const marks = [
+      ...figureEngraving(shapeId, c.width, c.height),
+      ...layers.map((l) => [...l, l[0]]),
+    ]
     out.push({
       name: `figure-${c.id}`,
       outline: translate(grown, -b.minX, -b.minY),
       holes: [],
+      ...(marks.length > 0 ? { engrave: marks.map((l) => translate(l, -b.minX, -b.minY)) } : {}),
       width: b.maxX - b.minX,
       height: b.maxY - b.minY,
+    })
+    // raised detail plates: one for each face of the figure
+    layers.forEach((layer, k) => {
+      const lb = bounds(layer)
+      for (const face of ['front', 'back']) {
+        out.push({
+          name: `detail-${c.id}-${k + 1}-${face}`,
+          outline: translate(layer, -lb.minX, -lb.minY),
+          holes: [],
+          width: lb.maxX - lb.minX,
+          height: lb.maxY - lb.minY,
+        })
+      }
     })
     return out
   }
@@ -960,6 +1001,10 @@ export function propConflicts(spec: AutomatonSpec): string[] {
   return bad
 }
 
+function openPathToSvg(path: Path): string {
+  return path.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(3)},${p.y.toFixed(3)}`).join(' ')
+}
+
 function pathToSvg(path: Path): string {
   const d = path.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(3)},${p.y.toFixed(3)}`).join(' ')
   return `${d} Z`
@@ -993,6 +1038,7 @@ function rotatePart(part: Part): Part {
     name: part.name,
     outline: turn(part.outline),
     holes: part.holes.map(turn),
+    ...(part.engrave ? { engrave: part.engrave.map(turn) } : {}),
     width: part.height,
     height: part.width,
   }
@@ -1092,6 +1138,7 @@ export function flatPackSvg(spec: AutomatonSpec): string {
   const sheets = packSheets(spec)
   const all = sheets.flatMap((s) => s.parts.map((p) => p.part))
   const cut: string[] = []
+  const score: string[] = []
   const labels: string[] = []
   const edges: string[] = []
   let top = 0
@@ -1107,6 +1154,8 @@ export function flatPackSvg(spec: AutomatonSpec): string {
       const oy = dy + top
       cut.push(`<path d="${pathToSvg(translate(part.outline, dx, oy))}"/>`)
       for (const hole of part.holes) cut.push(`<path d="${pathToSvg(translate(hole, dx, oy))}"/>`)
+      for (const line of part.engrave ?? [])
+        score.push(`<path d="${openPathToSvg(translate(line, dx, oy))}"/>`)
       const pb = bounds(translate(part.outline, dx, oy))
       // tiny repeated parts (crown tooth tabs) get one grouped label
       const groupMatch = /^(crown-tooth-.*)-(\d+)$/.exec(part.name)
@@ -1140,12 +1189,15 @@ export function flatPackSvg(spec: AutomatonSpec): string {
 
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${docW}mm" height="${docH}mm" viewBox="0 0 ${docW} ${docH}">`,
-    `<!-- ${spec.name} — flat-pack, kerf ${spec.export.kerf} mm, material ${spec.frame.materialThickness} mm, ${sheets.length} sheet(s). Red = cut, blue = engrave, green = sheet edge (do not cut). -->`,
+    `<!-- ${spec.name} — flat-pack, kerf ${spec.export.kerf} mm, material ${spec.frame.materialThickness} mm, ${sheets.length} sheet(s). Red = cut through, blue = engrave/score on the surface, green = sheet edge (do not cut). -->`,
     `<g id="sheet-edges" fill="none" stroke="#00a000" stroke-width="0.1">`,
     ...edges,
     `</g>`,
     `<g id="cut" fill="none" stroke="#ff0000" stroke-width="0.1">`,
     ...cut,
+    `</g>`,
+    `<g id="score" fill="none" stroke="#0000ff" stroke-width="0.1">`,
+    ...score,
     `</g>`,
     `<g id="engrave" fill="#0000ff" font-family="sans-serif">`,
     ...labels,

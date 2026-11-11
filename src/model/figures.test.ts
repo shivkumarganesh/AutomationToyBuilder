@@ -49,3 +49,37 @@ describe('figure shape library', () => {
     expect(() => figureOutline('no-such-shape', 10, 10)).toThrow('unknown figure shape')
   })
 })
+
+describe('figure detail: engraving and raised layers', () => {
+  const inside = (poly: { x: number; y: number }[], pt: { x: number; y: number }) => {
+    let hit = false
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i]
+      const b = poly[j]
+      if (a.y > pt.y !== b.y > pt.y && pt.x < ((b.x - a.x) * (pt.y - a.y)) / (b.y - a.y) + a.x)
+        hit = !hit
+    }
+    return hit
+  }
+
+  it('engraved lines and detail plates sit on the figure, not in thin air', () => {
+    let withDetail = 0
+    for (const shape of Object.values(FIGURE_SHAPES)) {
+      const marks = [...(shape.engrave ?? []), ...(shape.layers ?? [])]
+      if (marks.length > 0) withDetail++
+      for (const [k, line] of marks.entries()) {
+        expect(line.length, `${shape.id} mark ${k}`).toBeGreaterThanOrEqual(2)
+        const on = line.filter((p) => inside(shape.outline, p)).length
+        expect(on / line.length, `${shape.id} mark ${k}`).toBeGreaterThanOrEqual(0.8)
+      }
+      for (const plate of shape.layers ?? []) {
+        expect(plate.length, shape.id).toBeGreaterThanOrEqual(5)
+        const cx = plate.reduce((s, p) => s + p.x, 0) / plate.length
+        const cy = plate.reduce((s, p) => s + p.y, 0) / plate.length
+        expect(inside(shape.outline, { x: cx, y: cy }), `${shape.id} plate centre`).toBe(true)
+      }
+    }
+    // most of the library carries detail
+    expect(withDetail).toBeGreaterThanOrEqual(12)
+  })
+})

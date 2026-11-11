@@ -25,7 +25,7 @@ const PART_COLORS: Record<PartGroup, string> = {
 function groupColor(name: string): string {
   if (name.startsWith('frame-')) return PART_COLORS.Box
   if (name.startsWith('prop-')) return PART_COLORS.Scenery
-  if (/^(figure-|limb-|axle-|wire-|hinge-stand|body-|post-|wing-)/.test(name)) return PART_COLORS.Figures
+  if (/^(figure-|detail-|limb-|axle-|wire-|hinge-stand|body-|post-|wing-)/.test(name)) return PART_COLORS.Figures
   return PART_COLORS.Mechanism
 }
 

@@ -6,11 +6,15 @@ import type { MotionId } from '../model/catalog'
 /** A library outline drawn to fit a square thumbnail, feet/base down. */
 function OutlineThumb({
   outline,
+  layers = [],
+  engrave = [],
   aspect,
   color,
   size,
 }: {
   outline: Point2[]
+  layers?: Point2[][]
+  engrave?: Point2[][]
   /** width / height of the real shape */
   aspect: number
   color: string
@@ -18,9 +22,9 @@ function OutlineThumb({
 }) {
   const w = aspect >= 1 ? 1 : aspect
   const h = aspect >= 1 ? 1 / aspect : 1
-  const d = outline
-    .map((p, i) => `${i ? 'L' : 'M'}${(p.x * w).toFixed(3)},${(-p.y * h).toFixed(3)}`)
-    .join(' ')
+  const path = (pts: Point2[]) =>
+    pts.map((p, i) => `${i ? 'L' : 'M'}${(p.x * w).toFixed(3)},${(-p.y * h).toFixed(3)}`).join(' ')
+  const d = path(outline)
   const pad = 0.08
   return (
     <svg
@@ -30,6 +34,20 @@ function OutlineThumb({
       aria-hidden="true"
     >
       <path d={`${d} Z`} fill={color} stroke="rgba(0,0,0,0.35)" strokeWidth={0.012} strokeLinejoin="round" />
+      {layers.map((l, i) => (
+        <path key={`l${i}`} d={`${path(l)} Z`} fill="rgba(0,0,0,0.18)" stroke="rgba(0,0,0,0.4)" strokeWidth={0.01} />
+      ))}
+      {engrave.map((l, i) => (
+        <path
+          key={`e${i}`}
+          d={path(l)}
+          fill="none"
+          stroke="rgba(0,0,0,0.5)"
+          strokeWidth={0.014}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
     </svg>
   )
 }
@@ -38,7 +56,14 @@ export function FigureThumb({ shape, color, size = 72 }: { shape: string; color:
   const s = FIGURE_SHAPES[shape]
   if (!s) return null
   return (
-    <OutlineThumb outline={s.outline} aspect={s.defaultWidth / s.defaultHeight} color={color} size={size} />
+    <OutlineThumb
+      outline={s.outline}
+      layers={s.layers}
+      engrave={s.engrave}
+      aspect={s.defaultWidth / s.defaultHeight}
+      color={color}
+      size={size}
+    />
   )
 }
 
