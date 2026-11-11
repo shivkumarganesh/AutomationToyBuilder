@@ -4,6 +4,7 @@ import { AutomatonScene } from '../scene/AutomatonScene'
 import { useDesignerStore, channelCount, MAX_CHANNELS } from '../model/store'
 import { useUiStore } from '../ui/uiStore'
 import { templates } from '../model/templates'
+import { StageMap } from '../ui/StageMap'
 import { camAngularRate, outputChannels, type AutomatonSpec, type CamSpec, type CharacterSpec } from '../model/types'
 import { CUSTOM_SHAPE, FIGURE_SHAPES, PICKABLE_FIGURES, type Point2 } from '../model/figures'
 import { MAX_PROPS, PROP_SHAPES } from '../model/props'
@@ -680,6 +681,12 @@ function ParamsRail({ units, setUnits }: { units: Units; setUnits: (u: Units) =>
                 <FigureCard key={c.id} ch={c} spec={spec} units={units} />
               ),
             )}
+
+          <PropCard title="Stage layout">
+            <div style={{ padding: '0 12px 12px' }}>
+              <StageMap />
+            </div>
+          </PropCard>
 
           {(spec.props ?? []).length > 0 && (
             <PropCard title="Scenery">

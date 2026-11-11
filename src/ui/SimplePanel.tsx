@@ -11,6 +11,7 @@ import { NumberField } from './NumberField'
 import { MotionEditor } from './MotionEditor'
 import { drawnFrom } from '../kinematics/drawnMotion'
 import { SceneryControls } from './SceneryControls'
+import { StageMap } from './StageMap'
 import { CustomThumb, FigureThumb, MotionIcon } from './Thumbs'
 import { ShapeStudio } from './ShapeStudio'
 import { MAX_RELIEF } from '../model/relief'
@@ -569,6 +570,13 @@ export function SimplePanel() {
 
   return (
     <>
+      <details className="section" open>
+        <summary>Stage layout</summary>
+        <div className="section-body">
+          <StageMap />
+        </div>
+      </details>
+
       <details className="section" open>
         <summary>Figures</summary>
         <div className="section-body">

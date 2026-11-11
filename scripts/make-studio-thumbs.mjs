@@ -10,6 +10,10 @@ const TOYS = {
   bird: 'Flapping Bird', simplest: 'Simplest Automaton', woodpecker: 'Snail Cam Woodpecker',
   nodspin: 'Nod & Spin Carousel', hummingbird: 'Geared Hummingbird', carousel: 'Bevel Gear Carousel',
   owl: 'Stepping Owl', gull: 'Soaring Gull',
+  reindeer: 'Leaping Reindeer',
+  sleighride: 'Sleigh Ride',
+  winterfriends: 'Winter Friends',
+  seaside: 'Seaside',
 }
 const browser = await chromium.launch({
   executablePath: process.argv[2] ?? '/opt/pw-browsers/chromium',

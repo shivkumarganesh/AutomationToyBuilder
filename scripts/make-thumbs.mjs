@@ -17,6 +17,10 @@ const TOYS = {
   manta: 'Manta Ray',
   dragon: 'Dragon',
   fish: 'Swimming Fish',
+  reindeer: 'Leaping Reindeer',
+  sleighride: 'Sleigh Ride',
+  winterfriends: 'Winter Friends',
+  seaside: 'Seaside',
 }
 
 const browser = await chromium.launch({

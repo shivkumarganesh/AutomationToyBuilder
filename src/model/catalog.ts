@@ -70,13 +70,14 @@ export const MOTIONS: Record<MotionId, MotionInfo> = {
   },
 }
 
-export type SceneId = 'none' | 'sea' | 'meadow' | 'sky'
+export type SceneId = 'none' | 'sea' | 'meadow' | 'sky' | 'winter'
 
 export const SCENES: Record<SceneId, { label: string }> = {
   none: { label: 'No scenery' },
   sea: { label: 'Sea' },
   meadow: { label: 'Meadow' },
   sky: { label: 'Sky' },
+  winter: { label: 'Christmas' },
 }
 
 export interface FigureInfo {
@@ -160,6 +161,34 @@ export const FIGURE_INFO: Record<string, FigureInfo> = {
     color: '#e0a54f',
     relief: 1,
   },
+  reindeer: {
+    blurb: 'Gallops through the snow, antlers high.',
+    motions: ['bounce', 'bob', 'drop'],
+    scene: 'winter',
+    color: '#a9713f',
+    relief: 1,
+  },
+  snowman: {
+    blurb: 'Bobs about in his scarf and top hat.',
+    motions: ['bob', 'spin', 'bounce'],
+    scene: 'winter',
+    color: '#f2f5f9',
+    relief: 2,
+  },
+  xmastree: {
+    blurb: 'Turns slowly to show off every bauble.',
+    motions: ['spin', 'bob', 'bounce'],
+    scene: 'winter',
+    color: '#2f8f5a',
+    relief: 1,
+  },
+  sleigh: {
+    blurb: 'Rides the drifts, loaded for the big night.',
+    motions: ['bob', 'nod', 'bounce'],
+    scene: 'winter',
+    color: '#c93a2e',
+    relief: 1,
+  },
   rocket: {
     blurb: 'Climbs through the clouds, falls back, tries again.',
     motions: ['drop', 'bob', 'spin'],
@@ -237,7 +266,30 @@ export const TEMPLATE_INFO: Record<string, TemplateInfo> = {
     tags: ['segmented body', '4 rods'],
     difficulty: 2,
   },
+  reindeer: {
+    blurb: 'One reindeer, one cam, three hops a turn. The easiest Christmas build.',
+    tags: ['1 cam', 'Christmas'],
+    difficulty: 1,
+  },
+  sleighride: {
+    blurb: 'Two reindeer gallop out of step ahead of a bobbing sleigh.',
+    tags: ['3 cams', 'Christmas'],
+    difficulty: 1,
+  },
+  winterfriends: {
+    blurb: 'A snowman and a Christmas tree take turns bobbing outside a snowy cabin.',
+    tags: ['2 cams', 'Christmas'],
+    difficulty: 1,
+  },
+  seaside: {
+    blurb: 'A whale, a fish and a sailboat rise and fall like one long wave.',
+    tags: ['3 cams', 'sea'],
+    difficulty: 1,
+  },
 }
+
+/** The easiest builds: nothing but cams and pushrods on one straight shaft. */
+export const SIMPLE_TEMPLATES = ['reindeer', 'sleighride', 'winterfriends', 'seaside']
 
 /** Templates whose figure itself is jointed or segmented — shown first in the gallery. */
 export const ARTICULATED_TEMPLATES = ['flyingbird', 'manta', 'dragon', 'fish', 'bird']
@@ -278,8 +330,105 @@ export function sceneProps(scene: SceneId): PropSpec[] {
       return [make('prop-grass', 'grass', 0.3), make('prop-tree', 'tree', 0.84)]
     case 'sky':
       return [make('prop-cloud-1', 'cloud', 0.2), make('prop-cloud-2', 'cloud', 0.82, 0.8)]
+    case 'winter':
+      return [
+        make('prop-snow', 'snowdrift', 0.5),
+        make('prop-pine-1', 'pine', 0.13),
+        make('prop-pine-2', 'pine', 0.88, 0.8),
+      ]
     case 'none':
       return []
+  }
+}
+
+/** One member of a scene's cast: a library figure and how it moves. */
+export interface CastMember {
+  shape: string
+  /** Only the three motions that need nothing but a cam and a rod. */
+  motion: 'bob' | 'bounce' | 'drop'
+  /** When in the turn it moves, degrees; defaults to an even stagger along the row. */
+  phaseDeg?: number
+  /** Size relative to the library default. */
+  scale?: number
+}
+
+/** Clear stage either side of each figure, mm. */
+const CAST_GAP = 10
+/** Widest toy the composer lays out: its stage still fits the 300 mm sheet. */
+export const MAX_SCENE_WIDTH = 280
+export const MAX_CAST = 5
+
+/**
+ * Compose a whole SCENE from a cast list: every figure gets its own cam
+ * and pushrod on ONE straight shaft — the simplest mechanism there is —
+ * spaced so neighbours never touch, in a box grown to fit them, with
+ * scenery in front and behind. Figures are staggered round the turn so
+ * a row of them moves like a wave.
+ */
+export function composeScene(name: string, cast: CastMember[], scene: SceneId = 'none'): AutomatonSpec {
+  if (cast.length < 1 || cast.length > MAX_CAST) throw new Error(`a scene has 1 to ${MAX_CAST} figures`)
+  const t = 3
+  const sized = cast.map((m) => {
+    const shape = FIGURE_SHAPES[m.shape]
+    if (!shape) throw new Error(`unknown figure shape ${m.shape}`)
+    const k = m.scale ?? 1
+    return { m, shape, width: Math.round(shape.defaultWidth * k), height: Math.round(shape.defaultHeight * k) }
+  })
+  // every figure gets a slot at least as wide as its cam's follower pad
+  const slots = sized.map((f) => Math.max(f.width, 30) + CAST_GAP)
+  const inner = Math.max(140 - 2 * t, slots.reduce((a, b) => a + b, 0) + CAST_GAP)
+  const width = inner + 2 * t
+  if (width > MAX_SCENE_WIDTH) throw new Error('this cast is too wide for one sheet: use fewer or smaller figures')
+  const spare = (inner - slots.reduce((a, b) => a + b, 0)) / slots.length
+  let x = 0
+  const used = new Map<string, number>()
+  const units = sized.map((f, i) => {
+    const slot = slots[i] + spare
+    const position = Math.round(((x + slot / 2) / inner) * 1000) / 1000
+    x += slot
+    const n = (used.get(f.m.shape) ?? 0) + 1
+    used.set(f.m.shape, n)
+    const id = `${f.m.shape}-${n}`
+    const cam: CamSpec = {
+      ...liftCam(f.m.motion, position),
+      id: `cam-${id}`,
+      phaseDeg: f.m.phaseDeg ?? Math.round((360 / sized.length) * i),
+    }
+    const info = FIGURE_INFO[f.m.shape]
+    const character: CharacterSpec = {
+      id: `figure-${id}`,
+      channelId: `rod-${id}`,
+      kind: 'silhouette',
+      shape: f.m.shape,
+      width: f.width,
+      height: f.height,
+      depth: 14,
+      color: info?.color ?? '#e0a54f',
+      label: n > 1 ? `${f.shape.label} ${n}` : f.shape.label,
+      ...(info?.relief ? { relief: info.relief } : {}),
+    }
+    return {
+      cam,
+      rod: { id: `rod-${id}`, camId: cam.id, rodWidth: 6, padWidth: f.m.motion === 'drop' ? 8 : 22, length: 46 },
+      character,
+    }
+  })
+  const props = sceneProps(scene).map((p) => ({ ...p, width: Math.min(Math.round(p.width * Math.max(1, width / 160)), width - 20) }))
+  return {
+    name,
+    frame: { width, depth: 80, height: 100, materialThickness: t },
+    mechanism: {
+      shaftDiameter: 6,
+      shaftHeight: 50,
+      crank: { ...CRANK },
+      cams: units.map((u) => u.cam),
+      pushrods: units.map((u) => u.rod),
+      rockers: [],
+      spinners: [],
+    },
+    characters: units.map((u) => u.character),
+    ...(props.length > 0 ? { props } : {}),
+    export: { ...DEFAULT_EXPORT },
   }
 }
 
