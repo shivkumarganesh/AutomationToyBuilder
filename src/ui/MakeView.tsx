@@ -80,6 +80,7 @@ export function MakeView() {
   const method = useUiStore((s) => s.method)
   const setMethod = useUiStore((s) => s.setMethod)
   const setView = useUiStore((s) => s.setView)
+  const inAtomm = useUiStore((s) => s.inAtomm)
   const [tab, setTab] = useState<Tab>('preview')
   const [done, setDone] = useState<Record<number, boolean>>({})
   const [status, setStatus] = useState<string | null>(null)
@@ -237,7 +238,18 @@ export function MakeView() {
         )}
 
         <div className="export-buttons">
-          {method === 'laser' ? (
+          {inAtomm ? (
+            <>
+              {/* hosted by atomm: the platform renders its Export button here
+                  and calls our export hook for the files */}
+              <div data-atomm-export-button className="atomm-export-slot" />
+              <p className="hint">
+                {method === 'laser'
+                  ? 'Download gives you the cutting sheets, the build guide and the design file. Open in Studio sends the cutting sheets: red lines cut, blue lines score, blue labels engrave.'
+                  : 'Download gives you the STL, the build guide and the design file. Open in Studio sends the laser cutting sheets, since Studio drives the laser.'}
+              </p>
+            </>
+          ) : method === 'laser' ? (
             <button
               className="primary big"
               onClick={() => downloadFile(`${slug}-flatpack.svg`, svg, 'image/svg+xml')}
@@ -254,12 +266,14 @@ export function MakeView() {
           )}
           <button onClick={openGuide}>Print the build guide (or save as PDF)</button>
           <div className="row">
-            <button
-              style={{ flex: 1 }}
-              onClick={() => downloadFile(`${slug}.json`, serializeSpec(spec), 'application/json')}
-            >
-              Save design file
-            </button>
+            {!inAtomm && (
+              <button
+                style={{ flex: 1 }}
+                onClick={() => downloadFile(`${slug}.json`, serializeSpec(spec), 'application/json')}
+              >
+                Save design file
+              </button>
+            )}
             <button style={{ flex: 1 }} onClick={share}>
               Copy share link
             </button>
@@ -290,7 +304,7 @@ export function MakeView() {
               <p className="hint">
                 {guide.sheets} sheet{guide.sheets === 1 ? '' : 's'} of {guide.footprint.width} ×{' '}
                 {guide.footprint.height} mm, {spec.frame.materialThickness} mm thick · red = cut · blue =
-                engraved labels · green = sheet edge (not cut)
+                scored detail and labels · green = sheet edge (not cut)
               </p>
               <div className="sheet" dangerouslySetInnerHTML={{ __html: svg }} />
             </div>

@@ -1370,3 +1370,23 @@ button.ghost {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* atomm: the platform draws its Export button into this slot; it is
+   themed only through the documented --atomm-export-* variables */
+.atomm-export-slot {
+  --atomm-export-width: 100%;
+  --atomm-export-height: 40px;
+  --atomm-export-radius: 8px;
+  --atomm-export-bg: #e0a54f;
+  --atomm-export-bg-hover: #e8b468;
+  --atomm-export-bg-active: #cf953f;
+  --atomm-export-color: #1a1408;
+  --atomm-export-z: 3;
+  min-height: 40px;
+}
+
+/* the platform owns the top bar: inside atomm ours gives up its brand
+   and keeps only the step navigation */
+.app.in-atomm .brand {
+  display: none;
+}

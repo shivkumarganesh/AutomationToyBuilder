@@ -87,6 +87,15 @@ src/
   FDM fit; the D-flat proportion matches the laser cams, so cut and printed
   parts interchange.
 
+## Running on atomm
+
+The app doubles as an [atomm](https://dev.atomm.com/docs/quickstart) generator.
+Hosted by the platform it shows atomm's Export button (Download / Open in
+Studio) and hands files over through the `export` hook; opened directly it
+shows its own download buttons. `npm run build:atomm` writes the upload zip.
+See [docs/ATOMM.md](docs/ATOMM.md) for how it works, the steps, and what is
+still missing for atomm's design review.
+
 ## Built for 3 mm basswood
 
 Every laser design is validated as a 3 mm basswood build

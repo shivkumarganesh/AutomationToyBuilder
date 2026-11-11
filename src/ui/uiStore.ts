@@ -50,6 +50,9 @@ function initialView(): View {
 }
 
 interface UiState extends Persisted {
+  /** Hosted by the atomm platform: exports go through its button, not ours. */
+  inAtomm: boolean
+  setInAtomm: (on: boolean) => void
   view: View
   setView: (view: View) => void
   setMode: (mode: EditMode) => void
@@ -70,6 +73,8 @@ export const useUiStore = create<UiState>((set, get) => {
   return {
     ...loadPersisted(),
     view: initialView(),
+    inAtomm: false,
+    setInAtomm: (inAtomm) => set({ inAtomm }),
     setView: (view) => set({ view }),
     setMode: (mode) => {
       set({ mode })

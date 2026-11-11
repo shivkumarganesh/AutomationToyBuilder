@@ -1140,78 +1140,123 @@ export function packSheets(spec: AutomatonSpec): PackedSheet[] {
 }
 
 /**
- * Render the flat-pack SVG document (mm units, hairline cut strokes):
- * the sheets stacked down the page, each with its edge drawn in green
- * for alignment (not a cut line).
+ * Colours the cut file speaks in. They follow the atomm / xTool Studio
+ * convention, which reads processing intent from colour: a red STROKE
+ * is a cut, a blue STROKE a line engraving (our scored detail), a blue
+ * FILL a filled engraving (our labels). Other laser software maps
+ * colours to operations by hand, so the exact values cost nothing there.
+ */
+export const CUT_COLOR = '#FE0002'
+export const ENGRAVE_COLOR = '#2366FF'
+const SHEET_EDGE_COLOR = '#00a000'
+
+/** One sheet's drawing, with every part shifted down the page by `top`. */
+function sheetMarkup(sheet: PackedSheet, all: Part[], top: number) {
+  const cut: string[] = []
+  const score: string[] = []
+  const labels: string[] = []
+  for (const { part, dx, dy } of sheet.parts) {
+    const oy = dy + top
+    cut.push(`<path d="${pathToSvg(translate(part.outline, dx, oy))}"/>`)
+    for (const hole of part.holes) cut.push(`<path d="${pathToSvg(translate(hole, dx, oy))}"/>`)
+    for (const line of part.engrave ?? [])
+      score.push(`<path d="${openPathToSvg(translate(line, dx, oy))}"/>`)
+    const pb = bounds(translate(part.outline, dx, oy))
+    // tiny repeated parts (crown tooth tabs) get one grouped label
+    const groupMatch = /^(crown-tooth-.*)-(\d+)$/.exec(part.name)
+    if (groupMatch) {
+      if (groupMatch[2] === '1') {
+        const count = all.filter((q) => q.name.startsWith(`${groupMatch[1]}-`)).length
+        labels.push(
+          `<text x="${pb.minX}" y="${pb.minY - 1.5}" font-size="3">${groupMatch[1]} ×${count}</text>`,
+        )
+      }
+    } else if (part.width >= 60 && part.height >= 30) {
+      // panels carry their name on the piece, clear of edge joints and the centre
+      const ly = pb.minY + (pb.maxY - pb.minY) * 0.3
+      labels.push(
+        `<text x="${(pb.minX + pb.maxX) / 2}" y="${ly.toFixed(2)}" text-anchor="middle" font-size="4">${part.name}</text>`,
+      )
+    } else {
+      // everything else is named on the scrap just below it, cut short
+      // so it never runs under the next part
+      const room = Math.max(4, Math.floor((pb.maxX - pb.minX + PART_GAP - 3) / 1.7))
+      const text = part.name.length > room ? `${part.name.slice(0, room - 1)}…` : part.name
+      labels.push(
+        `<text x="${pb.minX.toFixed(2)}" y="${(pb.maxY + 3.6).toFixed(2)}" font-size="3">${text}</text>`,
+      )
+    }
+  }
+  return { cut, score, labels }
+}
+
+function svgDocument(
+  spec: AutomatonSpec,
+  width: number,
+  height: number,
+  note: string,
+  layers: { cut: string[]; score: string[]; labels: string[]; edges?: string[] },
+): string {
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}mm" height="${height}mm" viewBox="0 0 ${width} ${height}">`,
+    `<!-- ${spec.name} — flat-pack, kerf ${spec.export.kerf} mm, material ${spec.frame.materialThickness} mm, ${note}. Red stroke = cut through, blue stroke = score on the surface, blue fill = engraved labels${layers.edges ? ', green = sheet edge (do not cut)' : ''}. -->`,
+    ...(layers.edges
+      ? [
+          `<g id="sheet-edges" fill="none" stroke="${SHEET_EDGE_COLOR}" stroke-width="0.1">`,
+          ...layers.edges,
+          `</g>`,
+        ]
+      : []),
+    `<g id="cut" fill="none" stroke="${CUT_COLOR}" stroke-width="0.1">`,
+    ...layers.cut,
+    `</g>`,
+    `<g id="score" fill="none" stroke="${ENGRAVE_COLOR}" stroke-width="0.1">`,
+    ...layers.score,
+    `</g>`,
+    `<g id="engrave" fill="${ENGRAVE_COLOR}" stroke="none" font-family="sans-serif">`,
+    ...layers.labels,
+    `</g>`,
+    `</svg>`,
+  ].join('\n')
+}
+
+/**
+ * Render the flat-pack as ONE SVG document (mm units, hairline cut
+ * strokes): the sheets stacked down the page, each with its edge drawn
+ * in green for alignment (not a cut line).
  */
 export function flatPackSvg(spec: AutomatonSpec): string {
   const sheets = packSheets(spec)
   const all = sheets.flatMap((s) => s.parts.map((p) => p.part))
-  const cut: string[] = []
-  const score: string[] = []
-  const labels: string[] = []
-  const edges: string[] = []
+  const layers = { cut: [] as string[], score: [] as string[], labels: [] as string[], edges: [] as string[] }
   let top = 0
   let docW = 0
   for (const [n, sheet] of sheets.entries()) {
-    edges.push(
-      `<rect x="0" y="${top}" width="${sheet.width}" height="${sheet.height}"/>`,
-    )
-    labels.push(
+    layers.edges.push(`<rect x="0" y="${top}" width="${sheet.width}" height="${sheet.height}"/>`)
+    layers.labels.push(
       `<text x="2" y="${top + 4}" font-size="3">sheet ${n + 1} of ${sheets.length} — ${sheet.width} × ${sheet.height} mm</text>`,
     )
-    for (const { part, dx, dy } of sheet.parts) {
-      const oy = dy + top
-      cut.push(`<path d="${pathToSvg(translate(part.outline, dx, oy))}"/>`)
-      for (const hole of part.holes) cut.push(`<path d="${pathToSvg(translate(hole, dx, oy))}"/>`)
-      for (const line of part.engrave ?? [])
-        score.push(`<path d="${openPathToSvg(translate(line, dx, oy))}"/>`)
-      const pb = bounds(translate(part.outline, dx, oy))
-      // tiny repeated parts (crown tooth tabs) get one grouped label
-      const groupMatch = /^(crown-tooth-.*)-(\d+)$/.exec(part.name)
-      if (groupMatch) {
-        if (groupMatch[2] === '1') {
-          const count = all.filter((q) => q.name.startsWith(`${groupMatch[1]}-`)).length
-          labels.push(
-            `<text x="${pb.minX}" y="${pb.minY - 1.5}" font-size="3">${groupMatch[1]} ×${count}</text>`,
-          )
-        }
-      } else if (part.width >= 60 && part.height >= 30) {
-        // panels carry their name on the piece, clear of edge joints and the centre
-        const ly = pb.minY + (pb.maxY - pb.minY) * 0.3
-        labels.push(
-          `<text x="${(pb.minX + pb.maxX) / 2}" y="${ly.toFixed(2)}" text-anchor="middle" font-size="4">${part.name}</text>`,
-        )
-      } else {
-        // everything else is named on the scrap just below it, cut short
-        // so it never runs under the next part
-        const room = Math.max(4, Math.floor((pb.maxX - pb.minX + PART_GAP - 3) / 1.7))
-        const text = part.name.length > room ? `${part.name.slice(0, room - 1)}…` : part.name
-        labels.push(
-          `<text x="${pb.minX.toFixed(2)}" y="${(pb.maxY + 3.6).toFixed(2)}" font-size="3">${text}</text>`,
-        )
-      }
-    }
+    const m = sheetMarkup(sheet, all, top)
+    layers.cut.push(...m.cut)
+    layers.score.push(...m.score)
+    layers.labels.push(...m.labels)
     docW = Math.max(docW, sheet.width)
     top += sheet.height + SHEET_SPACING
   }
-  const docH = top - SHEET_SPACING
+  return svgDocument(spec, docW, top - SHEET_SPACING, `${sheets.length} sheet(s)`, layers)
+}
 
-  return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${docW}mm" height="${docH}mm" viewBox="0 0 ${docW} ${docH}">`,
-    `<!-- ${spec.name} — flat-pack, kerf ${spec.export.kerf} mm, material ${spec.frame.materialThickness} mm, ${sheets.length} sheet(s). Red = cut through, blue = engrave/score on the surface, green = sheet edge (do not cut). -->`,
-    `<g id="sheet-edges" fill="none" stroke="#00a000" stroke-width="0.1">`,
-    ...edges,
-    `</g>`,
-    `<g id="cut" fill="none" stroke="#ff0000" stroke-width="0.1">`,
-    ...cut,
-    `</g>`,
-    `<g id="score" fill="none" stroke="#0000ff" stroke-width="0.1">`,
-    ...score,
-    `</g>`,
-    `<g id="engrave" fill="#0000ff" font-family="sans-serif">`,
-    ...labels,
-    `</g>`,
-    `</svg>`,
-  ].join('\n')
+/**
+ * Render the flat-pack as one SVG PER SHEET, each exactly the sheet's
+ * size at 1:1 in mm and carrying only machine operations — no sheet
+ * edge, no page furniture. This is the form handed to a machine
+ * workflow (atomm's Open in Studio), where every visible element is
+ * something the laser will do.
+ */
+export function flatPackSheetSvgs(spec: AutomatonSpec): string[] {
+  const sheets = packSheets(spec)
+  const all = sheets.flatMap((s) => s.parts.map((p) => p.part))
+  return sheets.map((sheet, n) =>
+    svgDocument(spec, sheet.width, sheet.height, `sheet ${n + 1} of ${sheets.length}`, sheetMarkup(sheet, all, 0)),
+  )
 }

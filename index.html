@@ -11,6 +11,12 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- atomm platform SDK: injects window.atomm when the page is hosted by
+         atomm. Deferred, so a blocked or slow CDN never holds up the app. -->
+    <script
+      defer
+      src="https://static-res.makextool.com/scripts/js/generator-sdk/platform-sdk.js"
+    ></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

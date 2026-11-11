@@ -3,11 +3,13 @@ import { flatPackSvg } from '../export/svgFlatPack'
 import { exportStl } from '../export/stlExport'
 import { downloadFile } from '../export/download'
 import { NumberField } from './NumberField'
+import { useUiStore } from './uiStore'
 
 /** Manufacturing settings and one-click exports for both fabrication routes. */
 export function ExportPanel() {
   const spec = useDesignerStore((s) => s.spec)
   const updateExport = useDesignerStore((s) => s.updateExport)
+  const inAtomm = useUiStore((s) => s.inAtomm)
 
   const slug = spec.name.toLowerCase().replace(/\s+/g, '-')
 
@@ -32,20 +34,25 @@ export function ExportPanel() {
           onChange={(v) => updateExport({ fdmClearance: v })}
         />
         <div className="export-buttons">
-          <button
-            className="primary"
-            onClick={() => downloadFile(`${slug}-flatpack.svg`, flatPackSvg(spec), 'image/svg+xml')}
-          >
-            Download SVG · laser cut
-          </button>
-          <button
-            className="primary"
-            onClick={() =>
-              downloadFile(`${slug}-parts.stl`, exportStl(spec), 'model/stl')
-            }
-          >
-            Download STL · 3D print
-          </button>
+          {inAtomm ? (
+            // hosted by atomm: files leave through the platform's button
+            <div data-atomm-export-button className="atomm-export-slot" />
+          ) : (
+            <>
+              <button
+                className="primary"
+                onClick={() => downloadFile(`${slug}-flatpack.svg`, flatPackSvg(spec), 'image/svg+xml')}
+              >
+                Download SVG · laser cut
+              </button>
+              <button
+                className="primary"
+                onClick={() => downloadFile(`${slug}-parts.stl`, exportStl(spec), 'model/stl')}
+              >
+                Download STL · 3D print
+              </button>
+            </>
+          )}
         </div>
         <p className="hint">
           SVG: finger-jointed walls, tabbed stage with guide slots, bearing holes, and
