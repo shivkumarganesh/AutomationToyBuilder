@@ -1,5 +1,5 @@
 import type { AutomatonSpec, CharacterSpec, PropSpec } from '../model/types'
-import { camAngularRate, camShaftY, outputChannels } from '../model/types'
+import { camAngularRate, camShaftY, outputChannels, STAGE_LIP } from '../model/types'
 import { layshaftY } from '../model/types'
 import { camOutline, type Point2 } from '../kinematics/camProfile'
 import { gearOutline } from '../kinematics/gearProfile'
@@ -7,8 +7,10 @@ import { displacementTable } from '../kinematics/follower'
 import { channelSignals, type ChannelSignal } from '../kinematics/channels'
 import { rockerPivotY } from '../scene/rockerLayout'
 import {
+  CROWN_RIM,
   CROWN_TOOTH_LENGTH,
   crownPitchRadius,
+  GENEVA_PIN_RADIUS,
   genevaWheelOutline,
 } from '../scene/spinnerLayout'
 import {
@@ -18,6 +20,14 @@ import {
 } from '../kinematics/linkage'
 import { DEFAULT_FIGURE_SHAPE, figureOutline } from '../model/figures'
 import { propFitsStage, propPlateOutline, propStageSlots } from '../scene/propLayout'
+import {
+  FLYER_TAB_WIDTH,
+  flyerBodyOutline,
+  flyerGeometry,
+  flyerPostHeight,
+  flyerPostOutline,
+  flyerWingPlate,
+} from '../scene/flyerLayout'
 import {
   HINGE_HEIGHT,
   LIMB_AXLE_DIAMETER,
@@ -253,8 +263,11 @@ export function generateParts(spec: AutomatonSpec): Part[] {
   }
 
   // Stage plate: slots for every wall tab + a guide slot per output channel.
+  // It overhangs the walls by STAGE_LIP all round, so every wall-tab slot
+  // has solid wood outside it. Openings are laid out in box coordinates
+  // and shifted by the lip at the end.
   {
-    const outline = panelOutline(w, d, t, kerf, {
+    const outline = panelOutline(w + 2 * STAGE_LIP, d + 2 * STAGE_LIP, t, kerf, {
       bottom: { type: 'straight' },
       right: { type: 'straight' },
       top: { type: 'straight' },
@@ -297,13 +310,27 @@ export function generateParts(spec: AutomatonSpec): Part[] {
         holes.push(circle(ch.x + w / 2, d / 2, (6 + 2 * GUIDE_CLEARANCE - kerf) / 2))
       }
     }
+    // flyers: a slot for each post's bottom tab, on the body centreline
+    {
+      const sigs = channelSignals(spec)
+      for (const c of spec.characters) {
+        const geo = flyerGeometry(spec, c, sigs)
+        if (geo) holes.push(rect(geo.xc + w / 2, d / 2, t - kerf, FLYER_TAB_WIDTH - kerf))
+      }
+    }
     // scenery: one slot per prop tab, in the prop's row
     for (const prop of spec.props ?? []) {
       for (const slot of propStageSlots(spec.frame, prop)) {
         holes.push(rect(slot.x + w / 2, slot.z + d / 2, slot.width - kerf, slot.depth - kerf))
       }
     }
-    parts.push({ name: 'stage', outline, holes, width: w, height: d })
+    parts.push({
+      name: 'stage',
+      outline,
+      holes: holes.map((hole) => translate(hole, STAGE_LIP, STAGE_LIP)),
+      width: w + 2 * STAGE_LIP,
+      height: d + 2 * STAGE_LIP,
+    })
   }
 
   // Bottom panel: plain rectangle glued inside the walls.
@@ -331,13 +358,21 @@ export function generateParts(spec: AutomatonSpec): Part[] {
     const b = bounds(outline)
     const centred = translate(outline, -b.minX, -b.minY)
     const hole = translate(dHolePath(mech.shaftDiameter - kerf, 0, 0), -b.minX, -b.minY)
-    parts.push({
-      name: `cam-${cam.kind}`,
-      outline: centred,
-      holes: [hole],
-      width: b.maxX - b.minX,
-      height: b.maxY - b.minY,
-    })
+    // a cam thicker than the sheet laminates from identical discs — the
+    // D-holes register the layers on the shaft
+    const layers = Math.max(1, Math.round(cam.thickness / t))
+    // named after the cam itself, so same-shaped cams with different
+    // throws can be told apart on the sheet and in the guide
+    const camName = cam.id.startsWith('cam-') ? cam.id : `cam-${cam.id}`
+    for (let k = 0; k < layers; k++) {
+      parts.push({
+        name: k === 0 ? camName : `${camName}-layer${k + 1}`,
+        outline: centred,
+        holes: [hole],
+        width: b.maxX - b.minX,
+        height: b.maxY - b.minY,
+      })
+    }
   }
 
   // Gear pair: same tooth outlines the scene meshes, keyed D-holes.
@@ -377,32 +412,30 @@ export function generateParts(spec: AutomatonSpec): Part[] {
         width: wb.maxX - wb.minX,
         height: wb.maxY - wb.minY,
       })
-      // driver disc: D-hole + a mortise for the pin tab near the rim
-      const Rd = sp.wheelRadius - 6
-      const disc = growRadially(circle(0, 0, Rd, 64), kerf / 2)
+      // driver: ONE piece — a keyed disc with a radial finger that is the
+      // drive pin (pin-diameter wide, reaching the pin circle radius), so
+      // there is no glued peg and no mortise beside the shaft hole
+      const Rd = Math.max(sp.wheelRadius - 6, mech.shaftDiameter / 2 + 5)
+      const pinHalf = GENEVA_PIN_RADIUS
+      const reach = sp.wheelRadius + GENEVA_PIN_RADIUS
+      const a0 = Math.asin(pinHalf / Rd)
+      const raw: Path = [
+        { x: reach, y: -pinHalf },
+        { x: reach, y: pinHalf },
+      ]
+      const ARC = 56
+      for (let i = 0; i <= ARC; i++) {
+        const a = a0 + (i / ARC) * (2 * Math.PI - 2 * a0)
+        raw.push({ x: Rd * Math.cos(a), y: Rd * Math.sin(a) })
+      }
+      const disc = growRadially(raw, kerf / 2)
       const db = bounds(disc)
       parts.push({
         name: `geneva-driver-${sp.id}`,
         outline: translate(disc, -db.minX, -db.minY),
-        holes: [
-          translate(dHolePath(mech.shaftDiameter - kerf, 0, 0), -db.minX, -db.minY),
-          translate(rect(Rd - 4, 0, 4 - kerf, t - kerf), -db.minX, -db.minY),
-        ],
+        holes: [translate(dHolePath(mech.shaftDiameter - kerf, 0, 0), -db.minX, -db.minY)],
         width: db.maxX - db.minX,
         height: db.maxY - db.minY,
-      })
-      // pin tab: glues through the driver mortise, reaches the pin circle radius
-      parts.push({
-        name: `geneva-pin-${sp.id}`,
-        outline: [
-          { x: 0, y: 0 },
-          { x: 12 + t, y: 0 },
-          { x: 12 + t, y: 4 + kerf },
-          { x: 0, y: 4 + kerf },
-        ],
-        holes: [],
-        width: 12 + t,
-        height: 4 + kerf,
       })
       // platform disc
       const platform = growRadially(circle(0, 0, sp.platformRadius, 72), kerf / 2)
@@ -432,7 +465,9 @@ export function generateParts(spec: AutomatonSpec): Part[] {
       const Rc = crownPitchRadius(sp)
       const teeth = sp.crownTeeth!
       const toothW = ((2 * Math.PI * Rc) / teeth) * 0.45
-      const disc = growRadially(circle(0, 0, Rc, 72), kerf / 2)
+      // the disc carries a rim OUTSIDE the tooth slots, so each mortise has
+      // solid wood around it (the teeth still stand on the pitch circle)
+      const disc = growRadially(circle(0, 0, Rc + CROWN_RIM, 72), kerf / 2)
       const db = bounds(disc)
       const holes = [translate(dHolePath(mech.shaftDiameter - kerf, 0, 0), -db.minX, -db.minY)]
       for (let i = 0; i < teeth; i++) {
@@ -583,8 +618,9 @@ export function generateParts(spec: AutomatonSpec): Part[] {
       height: 8,
     })
 
-    const post = stripPart(`linkage-post-${l.id}`, 6, mech.shaftHeight)
-    post.holes.push(circle(3, mech.shaftHeight - 4, runningHole(LINK_PIN_DIAMETER, kerf)))
+    // 8 mm wide: the pin hole keeps 2 mm+ of wood either side
+    const post = stripPart(`linkage-post-${l.id}`, 8, mech.shaftHeight)
+    post.holes.push(circle(4, mech.shaftHeight - 4, runningHole(LINK_PIN_DIAMETER, kerf)))
     parts.push(post)
   }
 
@@ -720,6 +756,42 @@ function characterParts(
     return pts
   }
 
+  if (c.kind === 'flyer') {
+    const geo = flyerGeometry(spec, c, signals)
+    if (!geo) return out
+    const t = spec.frame.materialThickness
+    const place = (name: string, raw: Path, holes: Path[] = []): Part => {
+      const b0 = bounds(raw)
+      const cx = (b0.minX + b0.maxX) / 2
+      const cy = (b0.minY + b0.maxY) / 2
+      const grown = growRadially(
+        raw.map((pt) => ({ x: pt.x - cx, y: pt.y - cy })),
+        kerf / 2,
+      ).map((pt) => ({ x: pt.x + cx, y: pt.y + cy }))
+      const b = bounds(grown)
+      return {
+        name,
+        outline: translate(grown, -b.minX, -b.minY),
+        holes: holes.map((h) => translate(h, -b.minX, -b.minY)),
+        width: b.maxX - b.minX,
+        height: b.maxY - b.minY,
+      }
+    }
+    // body: the post's top tab passes through a slot at the wing-root middle
+    out.push(
+      place(`body-${c.id}`, flyerBodyOutline(c), [rect(0, 0, t - kerf, FLYER_TAB_WIDTH - kerf)]),
+    )
+    out.push(place(`post-${c.id}`, flyerPostOutline(flyerPostHeight(spec, geo), t)))
+    for (const side of [geo.left, geo.right]) {
+      const tag = side.sign < 0 ? 'L' : 'R'
+      side.hinges.forEach((_, i) => {
+        const plate = flyerWingPlate(c, side, i).map((pt) => ({ x: side.sign * pt.x, y: pt.y }))
+        out.push(place(`wing-${c.id}-${tag}${i + 1}`, plate))
+      })
+    }
+    return out
+  }
+
   if (c.kind === 'silhouette') {
     // curated library outline, scaled to the figure's real dimensions
     const raw = figureOutline(c.shape ?? DEFAULT_FIGURE_SHAPE, c.width, c.height)
@@ -755,24 +827,55 @@ function characterParts(
   }
 
   // articulated: SIDE profile (depth × height) so limb axles cross the sheet
+  // An axle hole near an edge gets a LUG — the outline steps out around
+  // it — so every hole keeps LUG mm of wood on all sides.
+  const LUG = LIMB_AXLE_DIAMETER / 2 + 2.6
   const holes: Path[] = []
-  for (const limb of c.limbs ?? []) {
-    const y = Math.min(limbPivotFrac(limb.kind) * c.height, c.height - 3)
-    // wings/head axles cross mid-depth; the tail axle sits at the back edge
+  const limbs = c.limbs ?? []
+  const head = limbs.find((l) => l.kind === 'head')
+  const tail = limbs.find((l) => l.kind === 'tail')
+  // tail lug steps out of the back edge; everything shifts right by it
+  const backLug = tail ? Math.max(0, LUG - 3) : 0
+  const tailY = tail ? Math.min(limbPivotFrac('tail') * c.height, c.height - LUG) : 0
+  const bx = backLug
+  for (const limb of limbs) {
+    // wings/head axles cross mid-depth; the tail axle sits at the back edge.
+    // The head pivots AT the top of the body, inside its lug.
+    const y =
+      limb.kind === 'head'
+        ? c.height
+        : limb.kind === 'tail'
+          ? tailY
+          : Math.min(limbPivotFrac(limb.kind) * c.height, c.height - LUG)
     const x = limb.kind === 'tail' ? 3 : c.depth / 2
-    holes.push(circle(x, y, runningHole(LIMB_AXLE_DIAMETER, kerf)))
+    holes.push(circle(bx + x, y, runningHole(LIMB_AXLE_DIAMETER, kerf)))
   }
+  const body: Path = [
+    { x: bx, y: 0 },
+    { x: bx + c.depth, y: 0 },
+    { x: bx + c.depth, y: c.height },
+  ]
+  if (head)
+    body.push(
+      { x: bx + c.depth / 2 + LUG, y: c.height },
+      { x: bx + c.depth / 2 + LUG, y: c.height + LUG },
+      { x: bx + c.depth / 2 - LUG, y: c.height + LUG },
+      { x: bx + c.depth / 2 - LUG, y: c.height },
+    )
+  body.push({ x: bx, y: c.height })
+  if (tail && backLug > 0)
+    body.push(
+      { x: bx, y: tailY + LUG },
+      { x: 0, y: tailY + LUG },
+      { x: 0, y: tailY - LUG },
+      { x: bx, y: tailY - LUG },
+    )
   out.push({
     name: `figure-${c.id}`,
-    outline: [
-      { x: 0, y: 0 },
-      { x: c.depth, y: 0 },
-      { x: c.depth, y: c.height },
-      { x: 0, y: c.height },
-    ],
+    outline: body,
     holes,
-    width: c.depth,
-    height: c.height,
+    width: bx + c.depth,
+    height: c.height + (head ? LUG : 0),
   })
   out.push(stripPart(`figure-stand-${c.id}`, 8, Math.max(standHeight(spec, c, signals), 2)))
 
@@ -837,10 +940,10 @@ export function propConflicts(spec: AutomatonSpec): string[] {
   const bad: string[] = []
   for (const prop of props) {
     const mine = propStageSlots(spec.frame, prop).map((s) => ({
-      minX: s.x + w / 2 - s.width / 2,
-      maxX: s.x + w / 2 + s.width / 2,
-      minY: s.z + d / 2 - s.depth / 2,
-      maxY: s.z + d / 2 + s.depth / 2,
+      minX: s.x + w / 2 + STAGE_LIP - s.width / 2,
+      maxX: s.x + w / 2 + STAGE_LIP + s.width / 2,
+      minY: s.z + d / 2 + STAGE_LIP - s.depth / 2,
+      maxY: s.z + d / 2 + STAGE_LIP + s.depth / 2,
     }))
     const hit = mine.some((a) =>
       taken.some(
@@ -862,78 +965,189 @@ function pathToSvg(path: Path): string {
   return `${d} Z`
 }
 
-/** Render the full flat-pack SVG document (mm units, hairline cut strokes). */
-export function flatPackSvg(spec: AutomatonSpec): string {
-  const parts = generateParts(spec)
-  const GAP = 10
-  const MARGIN = 10
+/** The sheet stock the flat-pack is nested onto (a common hobby-laser size). */
+export const SHEET_WIDTH = 300
+export const SHEET_HEIGHT = 200
+const SHEET_MARGIN = 5
+const PART_GAP = 10
+const SHEET_SPACING = 12
 
-  // shelf-pack the parts into rows
-  let x = MARGIN
-  let y = MARGIN
-  let rowH = 0
-  let sheetW = 0
-  const placed: { part: Part; dx: number; dy: number }[] = []
-  const maxRowWidth = 420
-  for (const part of parts) {
-    const pb = bounds(part.outline)
-    const pw = pb.maxX - pb.minX
-    const ph = pb.maxY - pb.minY
-    if (x + pw > maxRowWidth && x > MARGIN) {
-      x = MARGIN
-      y += rowH + GAP
-      rowH = 0
-    }
-    placed.push({ part, dx: x - pb.minX, dy: y - pb.minY })
-    x += pw + GAP
-    rowH = Math.max(rowH, ph)
-    sheetW = Math.max(sheetW, x)
+export interface PlacedPart {
+  part: Part
+  /** Translation of the (possibly rotated) part onto its sheet. */
+  dx: number
+  dy: number
+}
+
+export interface PackedSheet {
+  width: number
+  height: number
+  parts: PlacedPart[]
+}
+
+/** Quarter-turn a part so a long piece can lie along the sheet. */
+function rotatePart(part: Part): Part {
+  const b = bounds(part.outline)
+  const turn = (path: Path) => path.map((p) => ({ x: p.y - b.minY, y: b.maxX - p.x }))
+  return {
+    name: part.name,
+    outline: turn(part.outline),
+    holes: part.holes.map(turn),
+    width: part.height,
+    height: part.width,
   }
-  const sheetH = y + rowH + MARGIN
+}
 
+/**
+ * Nest every part onto SHEET_WIDTH × SHEET_HEIGHT sheets (tallest
+ * first, in shelves). A part too big for any sheet gets a sheet of its
+ * own size — the basswood audit reports it.
+ */
+export function packSheets(spec: AutomatonSpec): PackedSheet[] {
+  const usableW = SHEET_WIDTH - 2 * SHEET_MARGIN
+  const usableH = SHEET_HEIGHT - 2 * SHEET_MARGIN
+  const sized = generateParts(spec).map((raw) => {
+    let part = raw
+    let b = bounds(part.outline)
+    // lie every part on its long side (low shelves pack tighter), unless
+    // it only fits the sheet the other way up
+    const w0 = b.maxX - b.minX
+    const h0 = b.maxY - b.minY
+    const landscape = w0 >= h0
+    const fitsAsIs = w0 <= usableW && h0 <= usableH
+    const fitsTurned = h0 <= usableW && w0 <= usableH
+    if ((!landscape && fitsTurned) || (!fitsAsIs && fitsTurned)) {
+      part = rotatePart(part)
+      b = bounds(part.outline)
+    }
+    return { part, b, w: b.maxX - b.minX, h: b.maxY - b.minY }
+  })
+  // first-fit decreasing height: tall parts open shelves, small parts
+  // then fill the leftover room on ANY sheet before a new one is started
+  sized.sort((p, q) => q.h - p.h || q.w - p.w)
+
+  interface Shelf {
+    y: number
+    h: number
+    x: number
+  }
+  const sheets: PackedSheet[] = []
+  const shelves = new Map<PackedSheet, Shelf[]>()
+  for (const { part, b, w, h } of sized) {
+    if (w > usableW || h > usableH) {
+      // oversize: its own sheet, sized to the part (the audit reports it)
+      sheets.push({
+        width: w + 2 * SHEET_MARGIN,
+        height: h + 2 * SHEET_MARGIN,
+        parts: [{ part, dx: SHEET_MARGIN - b.minX, dy: SHEET_MARGIN - b.minY }],
+      })
+      continue
+    }
+    const put = (sheet: PackedSheet, shelf: Shelf) => {
+      sheet.parts.push({ part, dx: shelf.x - b.minX, dy: shelf.y - b.minY })
+      shelf.x += w + PART_GAP
+    }
+    let done = false
+    // 1. an existing shelf with room
+    for (const [sheet, list] of shelves) {
+      const shelf = list.find((sh) => h <= sh.h && sh.x + w <= SHEET_WIDTH - SHEET_MARGIN)
+      if (shelf) {
+        put(sheet, shelf)
+        done = true
+        break
+      }
+    }
+    // 2. a new shelf on a sheet with height to spare
+    if (!done) {
+      for (const [sheet, list] of shelves) {
+        const last = list[list.length - 1]
+        const y = last.y + last.h + PART_GAP
+        if (y + h <= SHEET_HEIGHT - SHEET_MARGIN) {
+          const shelf = { y, h, x: SHEET_MARGIN }
+          list.push(shelf)
+          put(sheet, shelf)
+          done = true
+          break
+        }
+      }
+    }
+    // 3. a fresh sheet
+    if (!done) {
+      const sheet: PackedSheet = { width: SHEET_WIDTH, height: SHEET_HEIGHT, parts: [] }
+      const shelf = { y: SHEET_MARGIN, h, x: SHEET_MARGIN }
+      sheets.push(sheet)
+      shelves.set(sheet, [shelf])
+      put(sheet, shelf)
+    }
+  }
+  return sheets
+}
+
+/**
+ * Render the flat-pack SVG document (mm units, hairline cut strokes):
+ * the sheets stacked down the page, each with its edge drawn in green
+ * for alignment (not a cut line).
+ */
+export function flatPackSvg(spec: AutomatonSpec): string {
+  const sheets = packSheets(spec)
+  const all = sheets.flatMap((s) => s.parts.map((p) => p.part))
   const cut: string[] = []
   const labels: string[] = []
-  for (const { part, dx, dy } of placed) {
-    cut.push(`<path d="${pathToSvg(translate(part.outline, dx, dy))}"/>`)
-    for (const hole of part.holes) {
-      cut.push(`<path d="${pathToSvg(translate(hole, dx, dy))}"/>`)
-    }
-    const pb = bounds(translate(part.outline, dx, dy))
-    // tiny repeated parts (e.g. crown tooth tabs) get one grouped label
-    const groupMatch = /^(crown-tooth-.*)-(\d+)$/.exec(part.name)
-    if (part.width < 16 && groupMatch) {
-      if (groupMatch[2] === '1') {
-        const count = parts.filter((q) => q.name.startsWith(`${groupMatch[1]}-`)).length
-        labels.push(
-          `<text x="${pb.minX}" y="${pb.minY - 2}" font-size="4">${groupMatch[1]} ×${count}</text>`,
-        )
-      }
-    } else {
-      // roomy parts carry their label inside, clear of the edge joints and
-      // the centre hole; slim parts are labelled on the scrap just below
-      if (part.width >= 30 && part.height >= 16) {
+  const edges: string[] = []
+  let top = 0
+  let docW = 0
+  for (const [n, sheet] of sheets.entries()) {
+    edges.push(
+      `<rect x="0" y="${top}" width="${sheet.width}" height="${sheet.height}"/>`,
+    )
+    labels.push(
+      `<text x="2" y="${top + 4}" font-size="3">sheet ${n + 1} of ${sheets.length} — ${sheet.width} × ${sheet.height} mm</text>`,
+    )
+    for (const { part, dx, dy } of sheet.parts) {
+      const oy = dy + top
+      cut.push(`<path d="${pathToSvg(translate(part.outline, dx, oy))}"/>`)
+      for (const hole of part.holes) cut.push(`<path d="${pathToSvg(translate(hole, dx, oy))}"/>`)
+      const pb = bounds(translate(part.outline, dx, oy))
+      // tiny repeated parts (crown tooth tabs) get one grouped label
+      const groupMatch = /^(crown-tooth-.*)-(\d+)$/.exec(part.name)
+      if (groupMatch) {
+        if (groupMatch[2] === '1') {
+          const count = all.filter((q) => q.name.startsWith(`${groupMatch[1]}-`)).length
+          labels.push(
+            `<text x="${pb.minX}" y="${pb.minY - 1.5}" font-size="3">${groupMatch[1]} ×${count}</text>`,
+          )
+        }
+      } else if (part.width >= 60 && part.height >= 30) {
+        // panels carry their name on the piece, clear of edge joints and the centre
         const ly = pb.minY + (pb.maxY - pb.minY) * 0.3
         labels.push(
           `<text x="${(pb.minX + pb.maxX) / 2}" y="${ly.toFixed(2)}" text-anchor="middle" font-size="4">${part.name}</text>`,
         )
       } else {
-        // reads top-to-bottom in the gap to the right of the part
-        const lx = (pb.maxX + 2).toFixed(2)
-        const ly = pb.minY.toFixed(2)
+        // everything else is named on the scrap just below it, cut short
+        // so it never runs under the next part
+        const room = Math.max(4, Math.floor((pb.maxX - pb.minX + PART_GAP - 3) / 1.7))
+        const text = part.name.length > room ? `${part.name.slice(0, room - 1)}…` : part.name
         labels.push(
-          `<text x="${lx}" y="${ly}" transform="rotate(90 ${lx} ${ly})" font-size="4">${part.name}</text>`,
+          `<text x="${pb.minX.toFixed(2)}" y="${(pb.maxY + 3.6).toFixed(2)}" font-size="3">${text}</text>`,
         )
       }
     }
+    docW = Math.max(docW, sheet.width)
+    top += sheet.height + SHEET_SPACING
   }
+  const docH = top - SHEET_SPACING
 
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${sheetW}mm" height="${sheetH}mm" viewBox="0 0 ${sheetW} ${sheetH}">`,
-    `<!-- ${spec.name} — flat-pack, kerf ${spec.export.kerf} mm, material ${spec.frame.materialThickness} mm. Red = cut, blue = engrave. -->`,
-    `<g fill="none" stroke="#ff0000" stroke-width="0.1">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${docW}mm" height="${docH}mm" viewBox="0 0 ${docW} ${docH}">`,
+    `<!-- ${spec.name} — flat-pack, kerf ${spec.export.kerf} mm, material ${spec.frame.materialThickness} mm, ${sheets.length} sheet(s). Red = cut, blue = engrave, green = sheet edge (do not cut). -->`,
+    `<g id="sheet-edges" fill="none" stroke="#00a000" stroke-width="0.1">`,
+    ...edges,
+    `</g>`,
+    `<g id="cut" fill="none" stroke="#ff0000" stroke-width="0.1">`,
     ...cut,
     `</g>`,
-    `<g fill="#0000ff" font-family="sans-serif">`,
+    `<g id="engrave" fill="#0000ff" font-family="sans-serif">`,
     ...labels,
     `</g>`,
     `</svg>`,

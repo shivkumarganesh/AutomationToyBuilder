@@ -10,7 +10,8 @@ export ready-to-cut laser files and ready-to-print STL parts.
    butterfly, cat, dancer, rocket), then pick how it should move (bob, bounce,
    climb & drop, rock, spin, swoop). The app composes a complete working toy —
    mechanism, figure and matching scenery — from parameter sets the shipped
-   templates prove. Or open one of eight ready-made toys.
+   templates prove. Or open one of twelve ready-made toys — including the
+   articulated creatures: Flying Bird, Manta Ray, Dragon and Swimming Fish.
 2. **Design** — *Simple* mode talks in figures, motions and scenery (swap the
    figure, change the motion feel, how far it travels, timing, size; add up to
    four moving figures and static scenery plates). *Advanced* mode exposes every
@@ -86,6 +87,26 @@ src/
   FDM fit; the D-flat proportion matches the laser cams, so cut and printed
   parts interchange.
 
+## Built for 3 mm basswood
+
+Every laser design is validated as a 3 mm basswood build
+(`src/export/basswood.ts`), by the test-suite for every shipped toy and recipe
+and live in the Make view for the user's own edits:
+
+- no neck narrower than 2 mm carrying a meaningful piece of a part (pointed
+  tips are not necks);
+- at least 2 mm of wood between any hole and an edge or another hole;
+- no part smaller than 3 mm across, none larger than a 300 × 200 mm sheet;
+- anything thicker than the sheet (cams, pushrods) is cut as whole laminated
+  layers;
+- parts are nested onto 300 × 200 mm sheets and the sheet count is reported.
+
+The audit shaped the parts: the stage overhangs the walls so tab slots have
+solid wood outside them, axle holes near an edge get a lug, the Geneva driver
+is one piece with its pin as a finger, crown-gear tooth tabs are ≥ 3 mm with a
+rim outside their mortises. Bought-in stock is limited to dowel (shafts,
+spindles), small pins, wire for the wire-linkage bird, and hinge tape.
+
 ## Roadmap — growing the toy library
 
 Adding a toy = adding a template in `src/model/templates.ts` (plus, if it
@@ -113,6 +134,13 @@ introduces a new mechanism, a profile function in `src/kinematics/`):
   `src/model/catalog.ts` (every figure × motion is tested to produce a valid,
   conflict-free, fully exportable toy)
 - ~~printable assembly guide~~ — shipped as `src/export/buildGuide.ts`
+- ~~articulated creatures~~ — shipped: **flyers** (`kind: 'flyer'`, shapes in
+  `src/model/flyers.ts`, geometry in `src/scene/flyerLayout.ts`): a flat body
+  on a fixed post with tape-hinged wing plates, each plate resting on its own
+  pushrod (`angle = atan2(tip − hinge, arm)`, the second plate hanging from the
+  first plate's moving hinge) — the Flying Bird, Manta Ray and Dragon; and
+  **segmented bodies** (figure shapes with `partOf`), each segment on its own
+  phase-lagged cam — the Swimming Fish
 
 Next: segmented swimmers (phase-lagged body sections), a motion-first cam
 designer (draw the displacement curve, get the cam), per-part STL files.

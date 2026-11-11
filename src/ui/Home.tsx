@@ -6,6 +6,7 @@ import {
   composeToy,
   FIGURE_INFO,
   MOTIONS,
+  ARTICULATED_TEMPLATES,
   TEMPLATE_INFO,
   type MotionId,
 } from '../model/catalog'
@@ -44,6 +45,30 @@ export function Home() {
     setView('design')
   }
 
+  const toyCard = (key: string) => {
+    const spec = templates[key]
+    const t = TEMPLATE_INFO[key]
+    if (!spec) return null
+    return (
+      <button key={key} className="card toy-card" onClick={() => open(spec)}>
+        <span
+          className="toy-shot"
+          style={{ backgroundImage: `url(${import.meta.env.BASE_URL}thumbs/${key}.jpg)` }}
+        />
+        <span className="card-name">{spec.name}</span>
+        <span className="card-blurb">{t?.blurb}</span>
+        <span className="card-meta">
+          {t && <Difficulty level={t.difficulty} />}
+          {t?.tags.map((tag) => (
+            <span key={tag} className="tag">
+              {tag}
+            </span>
+          ))}
+        </span>
+      </button>
+    )
+  }
+
   const info = picked ? FIGURE_INFO[picked] : null
   const chosen = motion ?? info?.motions[0] ?? null
 
@@ -58,7 +83,7 @@ export function Home() {
         </p>
         <ol className="hero-steps">
           <li>
-            <b>1</b> Choose a figure
+            <b>1</b> Choose a creature
           </li>
           <li>
             <b>2</b> Tune the motion
@@ -70,6 +95,11 @@ export function Home() {
         <button className="ghost" onClick={() => setView('design')}>
           Continue with “{currentName}” →
         </button>
+      </section>
+
+      <section>
+        <h3 className="home-title">Articulated creatures — wings and bodies that really move</h3>
+        <div className="card-grid toys">{ARTICULATED_TEMPLATES.map((key) => toyCard(key))}</div>
       </section>
 
       <section>
@@ -93,31 +123,11 @@ export function Home() {
       </section>
 
       <section>
-        <h3 className="home-title">Or open a ready-made toy</h3>
+        <h3 className="home-title">More ready-made toys</h3>
         <div className="card-grid toys">
-          {Object.entries(templates).map(([key, spec]) => {
-            const t = TEMPLATE_INFO[key]
-            return (
-              <button key={key} className="card toy-card" onClick={() => open(spec)}>
-                <span
-                  className="toy-shot"
-                  style={{
-                    backgroundImage: `url(${import.meta.env.BASE_URL}thumbs/${key}.jpg)`,
-                  }}
-                />
-                <span className="card-name">{spec.name}</span>
-                <span className="card-blurb">{t?.blurb}</span>
-                <span className="card-meta">
-                  {t && <Difficulty level={t.difficulty} />}
-                  {t?.tags.map((tag) => (
-                    <span key={tag} className="tag">
-                      {tag}
-                    </span>
-                  ))}
-                </span>
-              </button>
-            )
-          })}
+          {Object.keys(templates)
+            .filter((key) => !ARTICULATED_TEMPLATES.includes(key))
+            .map((key) => toyCard(key))}
         </div>
       </section>
 

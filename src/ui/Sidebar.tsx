@@ -2,7 +2,9 @@ import type { CamSpec, CharacterSpec, LimbKind } from '../model/types'
 import { gearRatio, layshaftY, spinnerRatio } from '../model/types'
 import { channelCount, MAX_CHANNELS, MAX_LIMBS, useDesignerStore } from '../model/store'
 import { grashofOk } from '../kinematics/linkage'
-import { DEFAULT_FIGURE_SHAPE, FIGURE_SHAPES } from '../model/figures'
+import { channelSignals } from '../kinematics/channels'
+import { flyerIssues } from '../scene/flyerLayout'
+import { DEFAULT_FIGURE_SHAPE, PICKABLE_FIGURES } from '../model/figures'
 import { NumberField } from './NumberField'
 import { ExportPanel } from './ExportPanel'
 import { SavePanel } from './SavePanel'
@@ -169,6 +171,8 @@ function CharacterControls({ character: ch }: { character: CharacterSpec }) {
   const updateLimb = useDesignerStore((s) => s.updateLimb)
   const removeLimb = useDesignerStore((s) => s.removeLimb)
   const channelIds = useChannelIds()
+  const spec = useDesignerStore((s) => s.spec)
+  const flyerProblems = ch.kind === 'flyer' ? flyerIssues(spec, ch, channelSignals(spec)) : []
   const limbs = ch.limbs ?? []
   return (
     <div>
@@ -183,6 +187,7 @@ function CharacterControls({ character: ch }: { character: CharacterSpec }) {
           <option value="block">Block</option>
           <option value="articulated">Articulated</option>
           <option value="silhouette">Silhouette</option>
+          {ch.kind === 'flyer' && <option value="flyer">Flyer (hinged wings)</option>}
         </select>
         {ch.kind === 'silhouette' && (
           <select
@@ -191,7 +196,7 @@ function CharacterControls({ character: ch }: { character: CharacterSpec }) {
             value={ch.shape ?? DEFAULT_FIGURE_SHAPE}
             onChange={(e) => updateCharacter(ch.id, { shape: e.target.value })}
           >
-            {Object.values(FIGURE_SHAPES).map((shape) => (
+            {PICKABLE_FIGURES.map((shape) => (
               <option key={shape.id} value={shape.id}>
                 {shape.label}
               </option>
@@ -199,7 +204,7 @@ function CharacterControls({ character: ch }: { character: CharacterSpec }) {
           </select>
         )}
         <select
-          style={{ marginLeft: 6 }}
+          style={{ marginLeft: 6, display: ch.kind === 'flyer' ? 'none' : undefined }}
           title="Output channel this figure rides"
           value={ch.channelId}
           onChange={(e) => updateCharacter(ch.id, { channelId: e.target.value })}
@@ -225,19 +230,40 @@ function CharacterControls({ character: ch }: { character: CharacterSpec }) {
         </button>
       </div>
       <NumberField
-        label="Height"
+        label={ch.kind === 'flyer' ? 'Wing tip overhang past the outer rod' : 'Height'}
         value={ch.height}
-        min={10}
+        min={ch.kind === 'flyer' ? 6 : 10}
         max={60}
         onChange={(v) => updateCharacter(ch.id, { height: v })}
       />
       <NumberField
-        label="Width"
+        label={ch.kind === 'flyer' ? 'Body width' : 'Width'}
         value={ch.width}
-        min={8}
+        min={ch.kind === 'flyer' ? 12 : 8}
         max={50}
         onChange={(v) => updateCharacter(ch.id, { width: v })}
       />
+      {ch.kind === 'flyer' && (
+        <>
+          <NumberField
+            label="Body length"
+            value={ch.depth}
+            min={40}
+            max={140}
+            onChange={(v) => updateCharacter(ch.id, { depth: v })}
+          />
+          {flyerProblems.map((msg) => (
+            <p key={msg} className="hint warn">
+              {msg}
+            </p>
+          ))}
+          <p className="hint">
+            The wings rest on their pushrods: move a wing's cam along the shaft to change
+            its lever arm, change the cam's eccentricity for a bigger flap, and its phase
+            for the ripple.
+          </p>
+        </>
+      )}
       {ch.kind === 'articulated' && (
         <>
           {limbs.map((limb) => (
@@ -430,7 +456,7 @@ export function Sidebar() {
                     updateSpinner(
                       sp.id,
                       e.target.value === 'bevel'
-                        ? { drive: 'bevel', crownTeeth: 24, pinionTeeth: 8, module: 1.5 }
+                        ? { drive: 'bevel', crownTeeth: 16, pinionTeeth: 8, module: 2.25 }
                         : e.target.value === 'geneva'
                           ? { drive: 'geneva', stations: 6, wheelRadius: 16 }
                           : { drive: 'friction' },

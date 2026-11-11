@@ -2,9 +2,11 @@ import { useState } from 'react'
 import type { AutomatonSpec, CamSpec, CharacterSpec, OutputChannel } from '../model/types'
 import { outputChannels } from '../model/types'
 import { channelCount, MAX_CHANNELS, useDesignerStore } from '../model/store'
-import { FIGURE_SHAPES } from '../model/figures'
+import { FIGURE_SHAPES, PICKABLE_FIGURES } from '../model/figures'
 import { FIGURE_INFO, MOTIONS, type MotionId } from '../model/catalog'
 import { grashofOk } from '../kinematics/linkage'
+import { channelSignals } from '../kinematics/channels'
+import { flyerIssues } from '../scene/flyerLayout'
 import { NumberField } from './NumberField'
 import { SceneryControls } from './SceneryControls'
 import { FigureThumb, MotionIcon } from './Thumbs'
@@ -102,7 +104,7 @@ function FigureCard({ ch, spec }: { ch: CharacterSpec; spec: AutomatonSpec }) {
 
       {pickShape && (
         <div className="shape-grid">
-          {Object.values(FIGURE_SHAPES).map((shape) => (
+          {PICKABLE_FIGURES.map((shape) => (
             <button
               key={shape.id}
               className={`thumb-btn${ch.shape === shape.id ? ' selected' : ''}`}
@@ -253,6 +255,171 @@ function FigureCard({ ch, spec }: { ch: CharacterSpec; spec: AutomatonSpec }) {
   )
 }
 
+/** Set the eccentricity of the cams under a list of pushrods (eccentric cams only). */
+function setTravel(spec: AutomatonSpec, rodIds: string[], travel: number) {
+  const s = useDesignerStore.getState()
+  for (const id of rodIds) {
+    const rod = spec.mechanism.pushrods.find((r) => r.id === id)
+    const cam = spec.mechanism.cams.find((c) => c.id === rod?.camId)
+    if (cam?.kind === 'eccentric') s.updateCam(cam.id, { eccentricity: travel / 2 })
+  }
+}
+
+function camOf(spec: AutomatonSpec, rodId: string): CamSpec | undefined {
+  const rod = spec.mechanism.pushrods.find((r) => r.id === rodId)
+  return spec.mechanism.cams.find((c) => c.id === rod?.camId)
+}
+
+function travelOf(spec: AutomatonSpec, rodId: string): number {
+  const cam = camOf(spec, rodId)
+  return cam?.kind === 'eccentric' ? cam.eccentricity * 2 : 0
+}
+
+/** A hinged-wing creature: flap size, wing-tip whip and ripple, in plain words. */
+function FlyerCard({ ch, spec }: { ch: CharacterSpec; spec: AutomatonSpec }) {
+  const s = useDesignerStore.getState()
+  const f = ch.flyer!
+  const inner = [f.left[0], f.right[0]]
+  const outer = f.left.length > 1 ? [f.left[1], f.right[1]] : []
+  const issues = flyerIssues(spec, ch, channelSignals(spec))
+  const innerPhase = camOf(spec, inner[0])?.phaseDeg ?? 0
+  const outerPhase = outer.length ? (camOf(spec, outer[0])?.phaseDeg ?? 0) : 0
+  const lag = (((outerPhase - innerPhase) % 360) + 360) % 360
+  return (
+    <div className="unit">
+      <div className="unit-head">
+        <span className="swatch" style={{ background: ch.color }} />
+        <input
+          className="name-input"
+          value={ch.label}
+          aria-label="Figure name"
+          onChange={(e) => s.updateCharacter(ch.id, { label: e.target.value.slice(0, 40) || ch.label })}
+        />
+        <input
+          type="color"
+          value={ch.color}
+          title="Colour"
+          onChange={(e) => s.updateCharacter(ch.id, { color: e.target.value })}
+        />
+      </div>
+      <div className="motion-line">
+        <MotionIcon motion="nod" size={38} />
+        <div>
+          <b>{outer.length ? 'Rippling wings' : 'Flapping wings'}</b>
+          <span>
+            Hinged wing plates resting on {inner.length + outer.length} pushrods; the body
+            stays still on its post
+          </span>
+        </div>
+      </div>
+      {issues.map((msg) => (
+        <p key={msg} className="hint warn">
+          {msg}
+        </p>
+      ))}
+      <NumberField
+        label={outer.length ? 'Flap at the shoulder' : 'How far the wings flap'}
+        value={travelOf(spec, inner[0])}
+        min={2}
+        max={24}
+        step={1}
+        onChange={(v) => setTravel(spec, inner, v)}
+      />
+      {outer.length > 0 && (
+        <>
+          <NumberField
+            label="Whip at the wing tips"
+            value={travelOf(spec, outer[0])}
+            min={2}
+            max={28}
+            step={1}
+            onChange={(v) => setTravel(spec, outer, v)}
+          />
+          <NumberField
+            label="Ripple (how far the tips trail)"
+            value={lag}
+            min={0}
+            max={120}
+            step={5}
+            unit="°"
+            onChange={(v) => {
+              for (const id of outer) {
+                const cam = camOf(spec, id)
+                if (cam) s.updateCam(cam.id, { phaseDeg: (innerPhase + v) % 360 })
+              }
+            }}
+          />
+        </>
+      )}
+      <NumberField
+        label="Wing tip overhang"
+        value={ch.height}
+        min={6}
+        max={40}
+        onChange={(v) => s.updateCharacter(ch.id, { height: v })}
+      />
+    </div>
+  )
+}
+
+/** A body cut into segments, each on its own cam: one card for the whole creature. */
+function SegmentedCard({ parts, spec }: { parts: CharacterSpec[]; spec: AutomatonSpec }) {
+  const s = useDesignerStore.getState()
+  const channels = outputChannels(spec)
+  // head first: furthest along +X leads the wave
+  const ordered = [...parts].sort(
+    (a, b) =>
+      (channels.find((c) => c.id === b.channelId)?.x ?? 0) -
+      (channels.find((c) => c.id === a.channelId)?.x ?? 0),
+  )
+  const rods = ordered.map((p) => p.channelId)
+  const phases = rods.map((id) => camOf(spec, id)?.phaseDeg ?? 0)
+  const lag = phases.length > 1 ? (((phases[1] - phases[0]) % 360) + 360) % 360 : 0
+  return (
+    <div className="unit">
+      <div className="unit-head">
+        <span className="swatch" style={{ background: ordered[0].color }} />
+        <b>Swimming fish · {parts.length} segments</b>
+        <input
+          type="color"
+          value={ordered[0].color}
+          title="Colour"
+          onChange={(e) => parts.forEach((p) => s.updateCharacter(p.id, { color: e.target.value }))}
+        />
+      </div>
+      <div className="motion-line">
+        <MotionIcon motion="bob" size={38} />
+        <div>
+          <b>Travelling wave</b>
+          <span>Each segment rides its own cam, every one a little behind the last</span>
+        </div>
+      </div>
+      <NumberField
+        label="Wave height"
+        value={travelOf(spec, rods[0])}
+        min={2}
+        max={16}
+        step={1}
+        onChange={(v) => setTravel(spec, rods, v)}
+      />
+      <NumberField
+        label="Delay between segments"
+        value={lag}
+        min={0}
+        max={120}
+        step={5}
+        unit="°"
+        onChange={(v) =>
+          rods.forEach((id, i) => {
+            const cam = camOf(spec, id)
+            if (cam) s.updateCam(cam.id, { phaseDeg: (i * v) % 360 })
+          })
+        }
+      />
+    </div>
+  )
+}
+
 function AddFigure() {
   const spec = useDesignerStore((s) => s.spec)
   const addFigureWithMotion = useDesignerStore((s) => s.addFigureWithMotion)
@@ -273,7 +440,7 @@ function AddFigure() {
     <div className="unit adding">
       <b>Pick a figure</b>
       <div className="shape-grid">
-        {Object.values(FIGURE_SHAPES).map((sh) => (
+        {PICKABLE_FIGURES.map((sh) => (
           <button
             key={sh.id}
             className={`thumb-btn${shape === sh.id ? ' selected' : ''}`}
@@ -323,15 +490,25 @@ export function SimplePanel() {
   const spec = useDesignerStore((s) => s.spec)
   const updateFrame = useDesignerStore((s) => s.updateFrame)
   const setView = useUiStore((s) => s.setView)
+  const segments = spec.characters.filter(
+    (ch) => ch.kind === 'silhouette' && FIGURE_SHAPES[ch.shape ?? '']?.partOf,
+  )
 
   return (
     <>
       <details className="section" open>
         <summary>Figures</summary>
         <div className="section-body">
-          {spec.characters.map((ch) => (
-            <FigureCard key={ch.id} ch={ch} spec={spec} />
-          ))}
+          {segments.length > 0 && <SegmentedCard parts={segments} spec={spec} />}
+          {spec.characters
+            .filter((ch) => !segments.includes(ch))
+            .map((ch) =>
+              ch.kind === 'flyer' && ch.flyer ? (
+                <FlyerCard key={ch.id} ch={ch} spec={spec} />
+              ) : (
+                <FigureCard key={ch.id} ch={ch} spec={spec} />
+              ),
+            )}
           <AddFigure />
           <p className="hint">
             Drag the 3D view to look around. Tick “See through” to watch the mechanism

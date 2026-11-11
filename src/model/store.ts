@@ -160,6 +160,12 @@ function pruneCharacters(
 ): CharacterSpec[] {
   return characters
     .filter((c) => !removedChannelIds.includes(c.channelId))
+    // a flyer cannot fly on fewer rods than it has wing plates
+    .filter(
+      (c) =>
+        !c.flyer ||
+        ![...c.flyer.left, ...c.flyer.right].some((id) => removedChannelIds.includes(id)),
+    )
     .map((c) =>
       c.limbs?.some((l) => removedChannelIds.includes(l.channelId))
         ? { ...c, limbs: c.limbs.filter((l) => !removedChannelIds.includes(l.channelId)) }
@@ -551,6 +557,8 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
         ...s.spec,
         characters: s.spec.characters.map((c) => {
           if (c.id !== id || c.kind === kind) return c
+          // flyers are built around their wing rods — not convertible
+          if (c.kind === 'flyer' || kind === 'flyer') return c
           if (kind === 'block') {
             const { limbs: _limbs, shape: _shape, ...rest } = c
             return { ...rest, kind }

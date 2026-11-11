@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FIGURE_SHAPES } from './figures'
+import { PICKABLE_FIGURES } from './figures'
 import { PROP_SHAPES } from './props'
 import { templates } from './templates'
 import { composeToy, FIGURE_INFO, MOTIONS, TEMPLATE_INFO, type MotionId } from './catalog'
@@ -14,7 +14,7 @@ const motions = Object.keys(MOTIONS) as MotionId[]
 
 describe('catalogue coverage', () => {
   it('every library figure has gallery info with valid recommended motions', () => {
-    for (const id of Object.keys(FIGURE_SHAPES)) {
+    for (const { id } of PICKABLE_FIGURES) {
       const info = FIGURE_INFO[id]
       expect(info, id).toBeDefined()
       expect(info.motions.length, id).toBeGreaterThanOrEqual(2)
@@ -29,7 +29,7 @@ describe('catalogue coverage', () => {
 })
 
 describe('figure-first recipes: every figure × every motion', () => {
-  for (const shapeId of Object.keys(FIGURE_SHAPES)) {
+  for (const { id: shapeId } of PICKABLE_FIGURES) {
     for (const motion of motions) {
       it(`${shapeId} + ${motion} composes a buildable toy`, () => {
         const spec = composeToy(shapeId, motion)

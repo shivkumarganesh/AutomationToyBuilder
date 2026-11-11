@@ -209,10 +209,13 @@ export function couplerPlateOutline(l: LinkageSpec): { x: number; y: number }[] 
   const baseLy = WAND_HALF * cb
   const sR = (BAR_HALF - baseRy) / sb
   const sL = (BAR_HALF - baseLy) / sb
+  // a leaning wand's root can reach past the pin end of the bar — the bar
+  // grows to stay under it, so the wand never hangs off a sliver
+  const end = Math.max(x1, baseRx + sR * cb + 2)
   return [
     { x: x0, y: -BAR_HALF },
-    { x: x1, y: -BAR_HALF },
-    { x: x1, y: BAR_HALF },
+    { x: end, y: -BAR_HALF },
+    { x: end, y: BAR_HALF },
     { x: baseRx + sR * cb, y: BAR_HALF },
     { x: baseRx + L * cb, y: baseRy + L * sb },
     { x: baseLx + L * cb, y: baseLy + L * sb },

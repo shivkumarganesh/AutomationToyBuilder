@@ -40,6 +40,8 @@ export function drivenDiscRadius(spinner: SpinnerSpec): number {
  *   and pitch-line speeds match: ω_spindle · Rp = ω_crank · Rc.
  * ------------------------------------------------------------------ */
 
+/** Laser crown disc: solid rim left outside the tooth mortises. */
+export const CROWN_RIM = 2.5
 export const CROWN_TOOTH_LENGTH = 5
 export const CROWN_DISC_THICKNESS = 4
 export const PINION_THICKNESS = 5

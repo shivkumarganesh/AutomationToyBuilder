@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PropSpec } from '../model/types'
+import { STAGE_LIP } from '../model/types'
 import { PROP_SHAPES } from '../model/props'
 import { simplestAutomaton } from '../model/templates'
 import { generateParts, propConflicts } from '../export/svgFlatPack'
@@ -85,8 +86,9 @@ describe('scenery layout', () => {
       const hole = stage.holes[bare.holes.length + i]
       const xs = hole.map((q) => q.x)
       const ys = hole.map((q) => q.y)
-      expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(slot.x + frame.width / 2)
-      expect((Math.min(...ys) + Math.max(...ys)) / 2).toBeCloseTo(slot.z + frame.depth / 2)
+      // stage coordinates carry the lip the stage overhangs the walls by
+      expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(slot.x + frame.width / 2 + STAGE_LIP)
+      expect((Math.min(...ys) + Math.max(...ys)) / 2).toBeCloseTo(slot.z + frame.depth / 2 + STAGE_LIP)
       // slot narrows by the kerf so the tab is a friction fit
       expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(slot.width - kerf)
       expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(frame.materialThickness - kerf)

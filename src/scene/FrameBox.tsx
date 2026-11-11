@@ -1,5 +1,6 @@
 import { useDesignerStore } from '../model/store'
 import { useChannels } from './useChannels'
+import { STAGE_LIP } from '../model/types'
 
 const WOOD = '#c9a06a'
 const WOOD_DARK = '#a87f4f'
@@ -48,7 +49,7 @@ export function FrameBox() {
       </mesh>
       {/* stage plate — the physical interface between mechanism and characters */}
       <mesh position={[0, h + t / 2, 0]}>
-        <boxGeometry args={[w, t, d]} />
+        <boxGeometry args={[w + 2 * STAGE_LIP, t, d + 2 * STAGE_LIP]} />
         <meshStandardMaterial color={WOOD_DARK} />
       </mesh>
       {/* stage-interface markers: square guide slots for rods/posts, a round

@@ -199,7 +199,30 @@ export const TEMPLATE_INFO: Record<string, TemplateInfo> = {
     tags: ['four-bar linkage'],
     difficulty: 3,
   },
+  flyingbird: {
+    blurb: 'The body stays still on its post while two rods lift the hinged wings.',
+    tags: ['hinged wings', '2 rods'],
+    difficulty: 2,
+  },
+  manta: {
+    blurb: 'Two plates per wing on four rods — a wave rolls out to the wing tips.',
+    tags: ['rippling wings', '4 rods'],
+    difficulty: 3,
+  },
+  dragon: {
+    blurb: 'Bat wings that beat from the shoulder and whip at the wrist.',
+    tags: ['two-part wings', '4 rods'],
+    difficulty: 3,
+  },
+  fish: {
+    blurb: 'A body cut in four, each piece on its own cam — the fish swims.',
+    tags: ['segmented body', '4 rods'],
+    difficulty: 2,
+  },
 }
+
+/** Templates whose figure itself is jointed or segmented — shown first in the gallery. */
+export const ARTICULATED_TEMPLATES = ['flyingbird', 'manta', 'dragon', 'fish', 'bird']
 
 const DEFAULT_EXPORT = { kerf: 0.1, fdmClearance: 0.2 }
 const CRANK = { armLength: 25, handleLength: 30, handleDiameter: 10 }

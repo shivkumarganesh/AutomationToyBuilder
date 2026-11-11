@@ -26,6 +26,11 @@ export interface FigureShape {
   /** Sensible default size (mm) when a figure switches to this shape. */
   defaultWidth: number
   defaultHeight: number
+  /**
+   * Set on shapes that are one SEGMENT of a multi-part creature (each
+   * segment rides its own channel). Hidden from the figure pickers.
+   */
+  partOf?: string
 }
 
 /**
@@ -103,8 +108,8 @@ const dancer: FigureShape = {
 const bird: FigureShape = {
   id: 'bird',
   label: 'Bird',
-  defaultWidth: 34,
-  defaultHeight: 26,
+  defaultWidth: 40,
+  defaultHeight: 31,
   outline: [
     { x: 0, y: 0 },
     { x: 0.073, y: 0.014 },
@@ -652,6 +657,169 @@ const rocket: FigureShape = {
   ],
 }
 
+/** Segment of the swimming fish; its stem is the mount, x = 0 is the rod. */
+const fish_tail: FigureShape = {
+  id: 'fish-tail',
+  label: 'Fish tail',
+  partOf: 'fish',
+  defaultWidth: 24,
+  defaultHeight: 37,
+  outline: [
+    { x: -0.125, y: 0 },
+    { x: 0, y: 0 },
+    { x: 0.125, y: 0 },
+    { x: 0.125, y: 0.098 },
+    { x: 0.125, y: 0.197 },
+    { x: 0.125, y: 0.295 },
+    { x: 0.125, y: 0.394 },
+    { x: 0.125, y: 0.492 },
+    { x: 0.25, y: 0.459 },
+    { x: 0.25, y: 0.554 },
+    { x: 0.25, y: 0.649 },
+    { x: 0.25, y: 0.743 },
+    { x: 0.25, y: 0.838 },
+    { x: 0.135, y: 0.798 },
+    { x: 0, y: 0.757 },
+    { x: -0.099, y: 0.745 },
+    { x: -0.167, y: 0.743 },
+    { x: -0.278, y: 0.829 },
+    { x: -0.389, y: 0.914 },
+    { x: -0.5, y: 1 },
+    { x: -0.444, y: 0.883 },
+    { x: -0.389, y: 0.766 },
+    { x: -0.333, y: 0.649 },
+    { x: -0.389, y: 0.532 },
+    { x: -0.444, y: 0.414 },
+    { x: -0.5, y: 0.297 },
+    { x: -0.375, y: 0.383 },
+    { x: -0.25, y: 0.468 },
+    { x: -0.125, y: 0.554 },
+    { x: -0.125, y: 0.443 },
+    { x: -0.125, y: 0.332 },
+    { x: -0.125, y: 0.222 },
+    { x: -0.125, y: 0.111 },
+  ],
+}
+
+/** Segment of the swimming fish; its stem is the mount, x = 0 is the rod. */
+const fish_rear: FigureShape = {
+  id: 'fish-rear',
+  label: 'Fish body (rear)',
+  partOf: 'fish',
+  defaultWidth: 18,
+  defaultHeight: 37,
+  outline: [
+    { x: -0.167, y: 0 },
+    { x: 0, y: 0 },
+    { x: 0.167, y: 0 },
+    { x: 0.167, y: 0.113 },
+    { x: 0.167, y: 0.225 },
+    { x: 0.167, y: 0.338 },
+    { x: 0.333, y: 0.318 },
+    { x: 0.5, y: 0.297 },
+    { x: 0.5, y: 0.398 },
+    { x: 0.5, y: 0.498 },
+    { x: 0.5, y: 0.598 },
+    { x: 0.5, y: 0.699 },
+    { x: 0.5, y: 0.799 },
+    { x: 0.5, y: 0.9 },
+    { x: 0.5, y: 1 },
+    { x: 0.281, y: 0.971 },
+    { x: 0, y: 0.932 },
+    { x: -0.281, y: 0.888 },
+    { x: -0.5, y: 0.851 },
+    { x: -0.5, y: 0.75 },
+    { x: -0.5, y: 0.649 },
+    { x: -0.5, y: 0.547 },
+    { x: -0.5, y: 0.446 },
+    { x: -0.333, y: 0.419 },
+    { x: -0.167, y: 0.392 },
+    { x: -0.167, y: 0.294 },
+    { x: -0.167, y: 0.196 },
+    { x: -0.167, y: 0.098 },
+  ],
+}
+
+/** Segment of the swimming fish; its stem is the mount, x = 0 is the rod. */
+const fish_front: FigureShape = {
+  id: 'fish-front',
+  label: 'Fish body (front)',
+  partOf: 'fish',
+  defaultWidth: 18,
+  defaultHeight: 43,
+  outline: [
+    { x: -0.167, y: 0 },
+    { x: 0, y: 0 },
+    { x: 0.167, y: 0 },
+    { x: 0.167, y: 0.089 },
+    { x: 0.167, y: 0.178 },
+    { x: 0.167, y: 0.267 },
+    { x: 0.333, y: 0.273 },
+    { x: 0.5, y: 0.279 },
+    { x: 0.5, y: 0.372 },
+    { x: 0.5, y: 0.465 },
+    { x: 0.5, y: 0.558 },
+    { x: 0.5, y: 0.651 },
+    { x: 0.5, y: 0.744 },
+    { x: 0.5, y: 0.837 },
+    { x: 0.278, y: 0.86 },
+    { x: 0.139, y: 0.93 },
+    { x: 0, y: 1 },
+    { x: -0.139, y: 0.936 },
+    { x: -0.278, y: 0.872 },
+    { x: -0.5, y: 0.86 },
+    { x: -0.5, y: 0.774 },
+    { x: -0.5, y: 0.688 },
+    { x: -0.5, y: 0.601 },
+    { x: -0.5, y: 0.515 },
+    { x: -0.5, y: 0.429 },
+    { x: -0.5, y: 0.342 },
+    { x: -0.5, y: 0.256 },
+    { x: -0.333, y: 0.256 },
+    { x: -0.167, y: 0.256 },
+    { x: -0.167, y: 0.171 },
+    { x: -0.167, y: 0.085 },
+  ],
+}
+
+/** Segment of the swimming fish; its stem is the mount, x = 0 is the rod. */
+const fish_head: FigureShape = {
+  id: 'fish-head',
+  label: 'Fish head',
+  partOf: 'fish',
+  defaultWidth: 20,
+  defaultHeight: 36,
+  outline: [
+    { x: -0.15, y: 0 },
+    { x: 0, y: 0 },
+    { x: 0.15, y: 0 },
+    { x: 0.15, y: 0.104 },
+    { x: 0.15, y: 0.208 },
+    { x: 0.15, y: 0.313 },
+    { x: 0.15, y: 0.417 },
+    { x: 0.255, y: 0.464 },
+    { x: 0.375, y: 0.528 },
+    { x: 0.461, y: 0.595 },
+    { x: 0.5, y: 0.667 },
+    { x: 0.452, y: 0.745 },
+    { x: 0.35, y: 0.819 },
+    { x: 0.222, y: 0.88 },
+    { x: 0.05, y: 0.931 },
+    { x: -0.219, y: 0.972 },
+    { x: -0.45, y: 1 },
+    { x: -0.45, y: 0.889 },
+    { x: -0.45, y: 0.778 },
+    { x: -0.45, y: 0.667 },
+    { x: -0.45, y: 0.556 },
+    { x: -0.45, y: 0.444 },
+    { x: -0.45, y: 0.333 },
+    { x: -0.3, y: 0.347 },
+    { x: -0.15, y: 0.361 },
+    { x: -0.15, y: 0.241 },
+    { x: -0.15, y: 0.12 },
+  ],
+}
+
 export const FIGURE_SHAPES: Record<string, FigureShape> = {
   dancer,
   bird,
@@ -663,7 +831,14 @@ export const FIGURE_SHAPES: Record<string, FigureShape> = {
   sailboat,
   cat,
   rocket,
+  'fish-tail': fish_tail,
+  'fish-rear': fish_rear,
+  'fish-front': fish_front,
+  'fish-head': fish_head,
 }
+
+/** Shapes a user picks as a whole figure (segments excluded). */
+export const PICKABLE_FIGURES: FigureShape[] = Object.values(FIGURE_SHAPES).filter((s) => !s.partOf)
 
 export const DEFAULT_FIGURE_SHAPE = 'dancer'
 

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { bevelCarousel, flappingBird, nodAndSpin, simplestAutomaton, soaringGull } from '../model/templates'
 import { crownPitchRadius } from '../scene/spinnerLayout'
-import { camWorldX, outputChannels } from '../model/types'
+import { camWorldX, outputChannels, STAGE_LIP } from '../model/types'
 import { channelSignals } from '../kinematics/channels'
-import { standHeight } from '../scene/figureLayout'
+import { LIMB_AXLE_DIAMETER, limbPinEndHalf, standHeight } from '../scene/figureLayout'
 import { flatPackSvg, generateParts } from './svgFlatPack'
 import { buildPrintParts, exportStl } from './stlExport'
 
@@ -43,6 +43,9 @@ describe('SVG flat-pack', () => {
         'pushrod-rod-b-layer1',
         'pushrod-rod-b-layer2',
         'crank-arm',
+        // 6 mm cams laminate from two 3 mm discs
+        'cam-eccentric-layer2',
+        'cam-petal-layer2',
       ].sort(),
     )
   })
@@ -104,12 +107,13 @@ describe('SVG flat-pack', () => {
     const channels = outputChannels(spec)
     for (const ch of channels) {
       if (ch.kind !== 'lift') continue
-      const expectedX = ch.x + w / 2
+      // the stage overhangs the walls by STAGE_LIP on every side
+      const expectedX = ch.x + w / 2 + STAGE_LIP
       const slot = stage.holes.find((hole) => {
         const b = bounds(hole)
         return (
           Math.abs((b.minX + b.maxX) / 2 - expectedX) < 0.01 &&
-          Math.abs((b.minY + b.maxY) / 2 - d / 2) < 0.01
+          Math.abs((b.minY + b.maxY) / 2 - (d / 2 + STAGE_LIP)) < 0.01
         )
       })
       expect(slot, `guide slot for ${ch.id}`).toBeDefined()
@@ -221,7 +225,7 @@ describe('articulated figure print parts', () => {
     plate.geometry.computeBoundingBox()
     const bb = plate.geometry.boundingBox!
     // from the pin-end round cap to the tip round cap
-    const expected = wings.crankArm + wings.width / 4 + wings.length + wings.width / 2
+    const expected = wings.crankArm + limbPinEndHalf(wings) + wings.length + wings.width / 2
     expect(bb.max.x - bb.min.x).toBeCloseTo(expected, 3)
   })
 
@@ -244,8 +248,11 @@ describe('articulated figure laser parts', () => {
   it('the body side profile carries one axle hole per limb', () => {
     const body = parts.find((p) => p.name === 'figure-figure-bird')!
     expect(body.holes).toHaveLength(bird.limbs!.length)
-    expect(body.width).toBeCloseTo(bird.depth, 3)
-    expect(body.height).toBeCloseTo(bird.height, 3)
+    // the profile grows a lug around each axle hole that sits at an edge:
+    // behind the tail axle and above the head axle
+    const lug = LIMB_AXLE_DIAMETER / 2 + 2.6
+    expect(body.width).toBeCloseTo(bird.depth + (lug - 3), 3)
+    expect(body.height).toBeCloseTo(bird.height + lug, 3)
   })
 
   it('the stand strip is cut to the derived linkage height', () => {

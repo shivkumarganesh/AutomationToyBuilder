@@ -216,18 +216,25 @@ export function limbPlateOutline(
   arcSegments = 12,
 ): { x: number; y: number }[] {
   const halfW = Math.max(limb.width / 2, 4)
+  // the pin end stays wide enough to keep 2 mm+ of wood around both holes
+  const pinHalf = limbPinEndHalf(limb)
   const pts: { x: number; y: number }[] = []
-  pts.push({ x: -limb.crankArm, y: -halfW / 2 })
+  pts.push({ x: -limb.crankArm, y: -pinHalf })
   pts.push({ x: limb.length, y: -halfW })
   for (let i = 1; i < arcSegments; i++) {
     const a = -Math.PI / 2 + (i / arcSegments) * Math.PI
     pts.push({ x: limb.length + halfW * Math.cos(a), y: halfW * Math.sin(a) })
   }
   pts.push({ x: limb.length, y: halfW })
-  pts.push({ x: -limb.crankArm, y: halfW / 2 })
+  pts.push({ x: -limb.crankArm, y: pinHalf })
   for (let i = 1; i < arcSegments; i++) {
     const a = Math.PI / 2 + (i / arcSegments) * Math.PI
-    pts.push({ x: -limb.crankArm + (halfW / 2) * Math.cos(a), y: (halfW / 2) * Math.sin(a) })
+    pts.push({ x: -limb.crankArm + pinHalf * Math.cos(a), y: pinHalf * Math.sin(a) })
   }
   return pts
+}
+
+/** Half-width (= cap radius) of a limb plate at its drive-pin end. */
+export function limbPinEndHalf(limb: Pick<LimbSpec, 'width'>): number {
+  return Math.min(Math.max(limb.width / 4, 3.9), Math.max(limb.width / 2, 4))
 }

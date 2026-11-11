@@ -1160,3 +1160,50 @@ button.ghost {
     flex-wrap: wrap;
   }
 }
+
+/* basswood / mechanism check */
+.check {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin: 10px 0 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  border: 1px solid var(--border);
+}
+
+.check.ok {
+  border-color: var(--good);
+  background: rgba(111, 181, 138, 0.1);
+}
+
+.check.ok b {
+  color: var(--good);
+}
+
+.check.bad {
+  border-color: var(--warn);
+  background: rgba(224, 118, 79, 0.1);
+}
+
+.check.bad b {
+  color: var(--warn);
+}
+
+.check ul {
+  margin: 2px 0 0;
+  padding-left: 16px;
+}
+
+.check .mono {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.sheet svg rect {
+  stroke: #3a9a4a;
+  stroke-width: 0.5;
+  stroke-dasharray: 3 2;
+}

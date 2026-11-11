@@ -13,6 +13,10 @@ const TOYS = {
   owl: 'Stepping Owl',
   bird: 'Flapping Bird',
   gull: 'Soaring Gull',
+  flyingbird: 'Flying Bird',
+  manta: 'Manta Ray',
+  dragon: 'Dragon',
+  fish: 'Swimming Fish',
 }
 
 const browser = await chromium.launch({
@@ -25,7 +29,7 @@ await page.goto('http://localhost:5199/')
 await page.addStyleTag({ content: '.crank-controls{display:none!important}' })
 for (const [key, name] of Object.entries(TOYS)) {
   await page.locator('.brand').click()
-  await page.locator('.toy-card', { hasText: name }).click()
+  await page.locator('.toy-card', { has: page.locator('.card-name', { hasText: new RegExp(`^${name}$`) }) }).click()
   await page.waitForTimeout(2500)
   await page.locator('.canvas-pane canvas').screenshot({
     path: `public/thumbs/${key}.jpg`,

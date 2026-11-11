@@ -10,6 +10,7 @@ import type {
 import { layshaftY } from './types'
 import { FIGURE_SHAPES } from './figures'
 import { MAX_PROPS, PROP_SHAPES } from './props'
+import { FLYER_SHAPES } from './flyers'
 import { simplestAutomaton } from './templates'
 
 /**
@@ -221,6 +222,7 @@ export function parseSpec(json: string): AutomatonSpec {
   ])
   if (rodIds.size !== pushrods.length + rockers.length + spinners.length + linkages.length)
     fail('output channel ids must be unique')
+  const liftIds = new Set(pushrods.map((r) => r.id))
 
   const characters = o.characters.map((raw, i): CharacterSpec => {
     const c = raw as Record<string, unknown>
@@ -229,21 +231,51 @@ export function parseSpec(json: string): AutomatonSpec {
       c.kind !== undefined &&
       c.kind !== 'block' &&
       c.kind !== 'articulated' &&
-      c.kind !== 'silhouette'
+      c.kind !== 'silhouette' &&
+      c.kind !== 'flyer'
     )
       fail(`character[${i}].kind unknown`)
     const ch: CharacterSpec = {
       id: str(c.id, `character[${i}].id`),
       channelId: str(c.channelId, `character[${i}].channelId`),
       kind:
-        c.kind === 'articulated' ? 'articulated' : c.kind === 'silhouette' ? 'silhouette' : 'block',
+        c.kind === 'articulated'
+          ? 'articulated'
+          : c.kind === 'silhouette'
+            ? 'silhouette'
+            : c.kind === 'flyer'
+              ? 'flyer'
+              : 'block',
       width: num(c.width, `character[${i}].width`, 4, 100),
       height: num(c.height, `character[${i}].height`, 4, 150),
-      depth: num(c.depth, `character[${i}].depth`, 4, 100),
+      depth: num(c.depth, `character[${i}].depth`, 4, 160),
       color: /^#[0-9a-fA-F]{6}$/.test(String(c.color)) ? String(c.color) : '#4f8fe0',
       label: str(c.label, `character[${i}].label`),
     }
     if (!rodIds.has(ch.channelId)) fail(`character[${i}] rides unknown channel ${ch.channelId}`)
+    if (ch.kind === 'flyer') {
+      const shape = str(c.shape, `character[${i}].shape`)
+      if (!(shape in FLYER_SHAPES)) fail(`character[${i}] uses unknown flyer shape ${shape}`)
+      ch.shape = shape
+      const f = c.flyer as Record<string, unknown>
+      if (typeof f !== 'object' || f === null) fail(`character[${i}].flyer missing`)
+      const side = (v: unknown, name: string): string[] => {
+        if (!Array.isArray(v) || v.length < 1 || v.length > 2)
+          fail(`character[${i}].flyer.${name} must list 1–2 channels`)
+        return v.map((id, j) => {
+          const ch = str(id, `character[${i}].flyer.${name}[${j}]`)
+          if (!liftIds.has(ch)) fail(`character[${i}] wing rod ${ch} is not a pushrod channel`)
+          return ch
+        })
+      }
+      const left = side(f.left, 'left')
+      const right = side(f.right, 'right')
+      if (left.length !== right.length) fail(`character[${i}] wings must have equal plate counts`)
+      if (new Set([...left, ...right]).size !== left.length + right.length)
+        fail(`character[${i}] wing rods must be distinct channels`)
+      if (left[0] !== ch.channelId) fail(`character[${i}].channelId must be its first left wing rod`)
+      ch.flyer = { left, right }
+    }
     if (ch.kind === 'silhouette') {
       const shape = str(c.shape, `character[${i}].shape`)
       if (!(shape in FIGURE_SHAPES)) fail(`character[${i}] uses unknown figure shape ${shape}`)

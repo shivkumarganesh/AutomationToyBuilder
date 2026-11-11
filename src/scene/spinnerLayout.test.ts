@@ -52,7 +52,7 @@ describe('bevel (crown + pinion) drive geometry', () => {
 
   it('ratio is derived from the teeth, never free', () => {
     expect(spinnerRatio(spinner)).toBeCloseTo(spinner.crownTeeth! / spinner.pinionTeeth!, 9)
-    expect(spinnerRatio(spinner)).toBe(3) // 24 / 8
+    expect(spinnerRatio(spinner)).toBe(2) // 16 / 8
   })
 
   it('pitch-line speeds match at the mesh point (no slip)', () => {
