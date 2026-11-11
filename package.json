@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:atomm": "tsc -b && vite build --base=./ --outDir dist-atomm && cd dist-atomm && zip -qr ../automaton-toy-designer-atomm.zip . && cd .. && echo 'Upload automaton-toy-designer-atomm.zip in the atomm Developer Console'",
     "preview": "vite preview",
     "test": "vitest run"
   },

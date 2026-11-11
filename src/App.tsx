@@ -39,6 +39,7 @@ export default function App() {
   const view = useUiStore((s) => s.view)
   const setView = useUiStore((s) => s.setView)
   const mode = useUiStore((s) => s.mode)
+  const inAtomm = useUiStore((s) => s.inAtomm)
   const canUndo = useDesignerStore((s) => s.past.length > 0)
   const canRedo = useDesignerStore((s) => s.future.length > 0)
   const undo = useDesignerStore((s) => s.undo)
@@ -58,7 +59,7 @@ export default function App() {
   }, [])
 
   return (
-    <div className={`app view-${view} mode-${mode}`}>
+    <div className={`app view-${view} mode-${mode}${inAtomm ? ' in-atomm' : ''}`}>
       <header className="app-header">
         <button className="brand" onClick={() => setView('home')} title="Back to the gallery">
           <span className="brand-mark" aria-hidden="true">
