@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { channelCount, MAX_CHANNELS, useDesignerStore } from './store'
+import { breakHistoryBurst, channelCount, MAX_CHANNELS, useDesignerStore } from './store'
+import { MAX_PROPS } from './props'
+import { parseSpec, serializeSpec } from './persistence'
+import { propConflicts } from '../export/svgFlatPack'
 import { simplestAutomaton } from './templates'
 import { outputChannels } from './types'
 import { channelSignals } from '../kinematics/channels'
@@ -189,5 +192,112 @@ describe('articulated characters', () => {
     const survivor = state().spec.characters.find((c) => c.id === figure.id)!
     expect(survivor.limbs).toHaveLength(1)
     expect(survivor.limbs![0].channelId).toBe('rod-a')
+  })
+})
+
+describe('addFigureWithMotion', () => {
+  it('installs a library figure on a new channel of the right kind', () => {
+    const cases = [
+      ['bob', 'lift', 'eccentric'],
+      ['bounce', 'lift', 'petal'],
+      ['drop', 'lift', 'snail'],
+      ['nod', 'tilt', 'eccentric'],
+      ['spin', 'spin', null],
+      ['swoop', 'path', null],
+    ] as const
+    for (const [motion, kind, camKind] of cases) {
+      state().loadTemplate(simplestAutomaton)
+      const before = state().spec
+      expect(state().addFigureWithMotion('whale', motion)).toBe(true)
+      const spec = state().spec
+      expect(channelCount(spec)).toBe(channelCount(before) + 1)
+      const figure = spec.characters[spec.characters.length - 1]
+      expect(figure.kind).toBe('silhouette')
+      expect(figure.shape).toBe('whale')
+      const channel = outputChannels(spec).find((c) => c.id === figure.channelId)!
+      expect(channel.kind, motion).toBe(kind)
+      if (camKind && (channel.kind === 'lift' || channel.kind === 'tilt'))
+        expect(channel.cam.kind, motion).toBe(camKind)
+      // existing figures are untouched and the design still validates
+      expect(spec.characters.slice(0, before.characters.length)).toEqual(before.characters)
+      expect(parseSpec(serializeSpec(spec))).toEqual(spec)
+    }
+  })
+
+  it('refuses unknown shapes and a full box', () => {
+    expect(state().addFigureWithMotion('unicorn', 'bob')).toBe(false)
+    while (channelCount(state().spec) < MAX_CHANNELS) state().addCam()
+    const full = state().spec
+    expect(state().addFigureWithMotion('fish', 'bob')).toBe(false)
+    expect(state().spec).toBe(full)
+  })
+})
+
+describe('scenery props', () => {
+  it('adds props in free, conflict-free spots up to the limit', () => {
+    for (const shape of ['waves', 'tree', 'cloud', 'grass', 'hills', 'tree']) state().addProp(shape)
+    const props = state().spec.props!
+    expect(props).toHaveLength(MAX_PROPS)
+    expect(new Set(props.map((p) => p.id)).size).toBe(MAX_PROPS)
+    state().addProp('waves')
+    expect(state().spec.props).toHaveLength(MAX_PROPS)
+    expect(parseSpec(serializeSpec(state().spec))).toEqual(state().spec)
+  })
+
+  it('a single default prop never collides with the stage openings', () => {
+    for (const shape of ['waves', 'grass', 'hills', 'tree', 'cloud']) {
+      state().loadTemplate(simplestAutomaton)
+      state().addProp(shape)
+      expect(propConflicts(state().spec), shape).toEqual([])
+    }
+  })
+
+  it('updates and removes props; designs without props stay prop-free', () => {
+    expect(state().spec.props).toBeUndefined()
+    state().addProp('tree')
+    const id = state().spec.props![0].id
+    state().updateProp(id, { row: 'front', position: 0.3 })
+    expect(state().spec.props![0]).toMatchObject({ row: 'front', position: 0.3 })
+    state().removeProp(id)
+    expect(state().spec.props).toEqual([])
+  })
+})
+
+describe('undo / redo', () => {
+  it('steps back and forward through design changes', () => {
+    breakHistoryBurst()
+    const a = state().spec
+    state().updateFrame({ width: 200 })
+    const b = state().spec
+    breakHistoryBurst()
+    state().updateFrame({ width: 220 })
+    expect(state().spec.frame.width).toBe(220)
+    state().undo()
+    expect(state().spec).toBe(b)
+    state().undo()
+    expect(state().spec).toBe(a)
+    state().redo()
+    expect(state().spec).toBe(b)
+    // a new edit after undo drops the redo branch
+    breakHistoryBurst()
+    state().updateFrame({ width: 180 })
+    expect(state().future).toHaveLength(0)
+    state().redo()
+    expect(state().spec.frame.width).toBe(180)
+  })
+
+  it('collapses a rapid burst (a slider drag) into one step', () => {
+    breakHistoryBurst()
+    const start = state().spec
+    for (const w of [170, 180, 190, 200]) state().updateFrame({ width: w })
+    state().undo()
+    expect(state().spec).toBe(start)
+  })
+
+  it('renames the design, ignoring blank names', () => {
+    state().setName('  My Whale  ')
+    expect(state().spec.name).toBe('My Whale')
+    state().setName('   ')
+    expect(state().spec.name).toBe('My Whale')
   })
 })

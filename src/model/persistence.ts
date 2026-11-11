@@ -5,9 +5,11 @@ import type {
   GearTrainSpec,
   LimbSpec,
   LinkageSpec,
+  PropSpec,
 } from './types'
 import { layshaftY } from './types'
 import { FIGURE_SHAPES } from './figures'
+import { MAX_PROPS, PROP_SHAPES } from './props'
 import { simplestAutomaton } from './templates'
 
 /**
@@ -98,8 +100,9 @@ export function parseSpec(json: string): AutomatonSpec {
   if (typeof frame !== 'object' || frame === null) fail('frame missing')
   const mech = o.mechanism as Record<string, unknown>
   if (typeof mech !== 'object' || mech === null) fail('mechanism missing')
-  if (!Array.isArray(mech.cams) || mech.cams.length < 1 || mech.cams.length > 8)
-    fail('mechanism.cams must be a non-empty array')
+  // spinner- and linkage-only toys carry no cam at all
+  if (!Array.isArray(mech.cams) || mech.cams.length > 8)
+    fail('mechanism.cams must be an array of at most 8 cams')
   if (!Array.isArray(mech.pushrods)) fail('mechanism.pushrods must be an array')
   // rockers/spinners were added after v1 — older saves simply omit them
   const rawRockers = mech.rockers === undefined ? [] : mech.rockers
@@ -273,6 +276,27 @@ export function parseSpec(json: string): AutomatonSpec {
     return ch
   })
 
+  // optional scenery — static plates on the stage
+  const rawProps = o.props === undefined ? [] : o.props
+  if (!Array.isArray(rawProps) || rawProps.length > MAX_PROPS) fail('props must be a short array')
+  const props = rawProps.map((rawProp, i): PropSpec => {
+    const p = rawProp as Record<string, unknown>
+    if (typeof p !== 'object' || p === null) fail(`prop[${i}] must be an object`)
+    const shape = str(p.shape, `prop[${i}].shape`)
+    if (!(shape in PROP_SHAPES)) fail(`prop[${i}] uses unknown prop shape ${shape}`)
+    if (p.row !== 'front' && p.row !== 'back') fail(`prop[${i}].row unknown`)
+    return {
+      id: str(p.id, `prop[${i}].id`),
+      shape,
+      position: num(p.position, `prop[${i}].position`, 0, 1),
+      row: p.row,
+      width: num(p.width, `prop[${i}].width`, 8, 400),
+      height: num(p.height, `prop[${i}].height`, 5, 200),
+      color: /^#[0-9a-fA-F]{6}$/.test(String(p.color)) ? String(p.color) : '#4fa9c9',
+    }
+  })
+  if (new Set(props.map((p) => p.id)).size !== props.length) fail('prop ids must be unique')
+
   const spec: AutomatonSpec = {
     name: str(o.name, 'name'),
     frame: {
@@ -298,6 +322,8 @@ export function parseSpec(json: string): AutomatonSpec {
       ...(mech.linkages !== undefined ? { linkages } : {}),
     },
     characters,
+    // only stamp the field when the save carried it — keeps round-trips exact
+    ...(o.props !== undefined ? { props } : {}),
     export: {
       kerf: num(exp.kerf, 'export.kerf', 0, 1),
       fdmClearance: num(exp.fdmClearance, 'export.fdmClearance', 0, 1),

@@ -4,9 +4,23 @@ A web-based tool to design, analyze, and fabricate hand-cranked automaton toys.
 Turn the crank, watch the cams dance the figures, tune every dimension, then
 export ready-to-cut laser files and ready-to-print STL parts.
 
-Built around the **Simplest Automaton Template**: a hand crank turning a
-horizontal camshaft with one eccentric cam and one petal cam, driving two
-vertical pushrods through stage guide slots, each carrying a figure block.
+## Using it — choose, design, make
+
+1. **Choose** — pick a figure (whale, dolphin, fish, sting ray, sailboat, bird,
+   butterfly, cat, dancer, rocket), then pick how it should move (bob, bounce,
+   climb & drop, rock, spin, swoop). The app composes a complete working toy —
+   mechanism, figure and matching scenery — from parameter sets the shipped
+   templates prove. Or open one of eight ready-made toys.
+2. **Design** — *Simple* mode talks in figures, motions and scenery (swap the
+   figure, change the motion feel, how far it travels, timing, size; add up to
+   four moving figures and static scenery plates). *Advanced* mode exposes every
+   cam, lever, gear and linkage dimension plus the displacement chart. Undo /
+   redo (Ctrl+Z), rename, auto-save, share links.
+3. **Make** — choose **laser cut** or **3D print**. Either route is a complete
+   kit: preview the cutting sheet or the packed print plate, read the parts and
+   shopping list, follow an assembly guide generated from this exact design
+   (shaft loading order with measured positions), and print the guide or save
+   it as a PDF.
 
 ## Running
 
@@ -43,8 +57,8 @@ src/
 ├── kinematics/   cam profiles (eccentric, petal, snail), follower solver, channel signals
 ├── scene/        react-three-fiber view: FrameBox boundary, mechanism/ group, character/ group
 ├── analysis/     displacement chart (lift vs crank angle, live marker, hover readout)
-├── export/       svgFlatPack (laser), stlExport (FDM), download helpers
-└── ui/           sidebar (parameters grouped by zone), crank controls, export panel
+├── export/       svgFlatPack (laser), stlExport (FDM), buildGuide (parts list, shopping list, assembly steps)
+└── ui/           app shell (Home gallery + wizard, Simple/Advanced sidebar, Make view), crank controls
 ```
 
 ## Manufacturing export
@@ -57,7 +71,12 @@ src/
   paddles whose pivot/pin hole spacing is exactly the crank arm. Kerf is a
   user parameter: joint boundaries shift so fingers/tabs widen and slots narrow
   by the kerf, and holes are drawn undersize — tight friction fits off the bed.
-- **3D print (binary STL, mm)** — D-profile camshaft, crank, pushrods with
+  The sheet also carries laminated T-shaped pushrods, the crank arm and the
+  scenery plates, so only dowel stock is bought in.
+- **3D print (binary STL, mm)** — the box itself as six flat finger-jointed
+  panels (the laser outlines with the kerf compensation run in reverse: a
+  negative kerf of twice the FDM clearance loosens every joint and hole),
+  scenery plates, D-profile camshaft, crank, pushrods with
   follower pads, cams, rocker hardware (lever, fulcrum post, link rod), figure
   blocks with hinge stands, and articulated figure kits: body printed with its
   derived stand, limb plates, pivot axles, and the WIRE CRANKS that carry each
@@ -87,7 +106,13 @@ introduces a new mechanism, a profile function in `src/kinematics/`):
   crossing), giving figures a true 2D glide with pitch — the `path` output
   channel
 
-Next arc — the figure & prop library: curated silhouette figures
-(`kind: 'silhouette'`, laser-kit style flat characters from
-`src/model/figures.ts` — first shape: the Dancer), then a figure-first
-wizard, scene props, and segmented swimmers.
+- ~~figure & prop library, figure-first workflow~~ — shipped: ten curated
+  silhouette figures (`src/model/figures.ts`), five scenery props
+  (`src/model/props.ts`, tabbed into derived stage slots via
+  `src/scene/propLayout.ts`), and the catalogue + recipes in
+  `src/model/catalog.ts` (every figure × motion is tested to produce a valid,
+  conflict-free, fully exportable toy)
+- ~~printable assembly guide~~ — shipped as `src/export/buildGuide.ts`
+
+Next: segmented swimmers (phase-lagged body sections), a motion-first cam
+designer (draw the displacement curve, get the cam), per-part STL files.

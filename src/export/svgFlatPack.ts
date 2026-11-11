@@ -1,4 +1,4 @@
-import type { AutomatonSpec, CharacterSpec } from '../model/types'
+import type { AutomatonSpec, CharacterSpec, PropSpec } from '../model/types'
 import { camAngularRate, camShaftY, outputChannels } from '../model/types'
 import { layshaftY } from '../model/types'
 import { camOutline, type Point2 } from '../kinematics/camProfile'
@@ -17,6 +17,7 @@ import {
   wandPlaneCrossing,
 } from '../kinematics/linkage'
 import { DEFAULT_FIGURE_SHAPE, figureOutline } from '../model/figures'
+import { propFitsStage, propPlateOutline, propStageSlots } from '../scene/propLayout'
 import {
   HINGE_HEIGHT,
   LIMB_AXLE_DIAMETER,
@@ -47,7 +48,7 @@ import {
 
 type Path = Point2[]
 
-interface Part {
+export interface Part {
   name: string
   outline: Path
   holes: Path[]
@@ -205,6 +206,14 @@ function bounds(path: Path) {
   return { minX, minY, maxX, maxY }
 }
 
+/** Follower pad height on a cut pushrod (matches the printed/rendered pad). */
+const PUSHROD_PAD = 4
+
+/** Sheet layers laminated to build a pushrod's square rod section. */
+export function pushrodLayers(rodWidth: number, sheet: number): number {
+  return Math.max(1, Math.round(rodWidth / sheet))
+}
+
 /** Generate all parts for the current spec. Exported for tests. */
 export function generateParts(spec: AutomatonSpec): Part[] {
   const { width: w, depth: d, height: h, materialThickness: t } = spec.frame
@@ -286,6 +295,12 @@ export function generateParts(spec: AutomatonSpec): Part[] {
         )
       } else {
         holes.push(circle(ch.x + w / 2, d / 2, (6 + 2 * GUIDE_CLEARANCE - kerf) / 2))
+      }
+    }
+    // scenery: one slot per prop tab, in the prop's row
+    for (const prop of spec.props ?? []) {
+      for (const slot of propStageSlots(spec.frame, prop)) {
+        holes.push(rect(slot.x + w / 2, slot.z + d / 2, slot.width - kerf, slot.depth - kerf))
       }
     }
     parts.push({ name: 'stage', outline, holes, width: w, height: d })
@@ -573,6 +588,67 @@ export function generateParts(spec: AutomatonSpec): Part[] {
     parts.push(post)
   }
 
+  // Pushrods: a T-shaped strip (follower pad + rod). The rod runs in a
+  // square guide slot, so it laminates from as many sheet layers as it
+  // takes to build the rod's square section.
+  for (const ch of outputChannels(spec)) {
+    if (ch.kind !== 'lift') continue
+    const { rodWidth, padWidth, length } = ch.pushrod
+    const layers = pushrodLayers(rodWidth, t)
+    const cx = padWidth / 2
+    const raw: Path = [
+      { x: 0, y: 0 },
+      { x: padWidth, y: 0 },
+      { x: padWidth, y: PUSHROD_PAD },
+      { x: cx + rodWidth / 2, y: PUSHROD_PAD },
+      { x: cx + rodWidth / 2, y: PUSHROD_PAD + length },
+      { x: cx - rodWidth / 2, y: PUSHROD_PAD + length },
+      { x: cx - rodWidth / 2, y: PUSHROD_PAD },
+      { x: 0, y: PUSHROD_PAD },
+    ]
+    for (let k = 0; k < layers; k++) {
+      parts.push({
+        name: layers > 1 ? `pushrod-${ch.id}-layer${k + 1}` : `pushrod-${ch.id}`,
+        outline: raw,
+        holes: [],
+        width: padWidth,
+        height: PUSHROD_PAD + length,
+      })
+    }
+  }
+
+  // Crank arm: a stadium plate keyed onto the shaft's D-flat, with a
+  // press-fit round hole for the handle — an offcut of the shaft dowel.
+  {
+    const arm = mech.crank.armLength
+    const r = mech.shaftDiameter / 2 + 5
+    const outline: Path = []
+    const SEG = 16
+    for (let i = 0; i <= SEG; i++) {
+      const a = Math.PI + (i / SEG) * Math.PI
+      outline.push({ x: r + r * Math.cos(a), y: r + r * Math.sin(a) })
+    }
+    for (let i = 0; i <= SEG; i++) {
+      const a = (i / SEG) * Math.PI
+      outline.push({ x: r + r * Math.cos(a), y: r + arm + r * Math.sin(a) })
+    }
+    parts.push({
+      name: 'crank-arm',
+      outline,
+      holes: [
+        dHolePath(mech.shaftDiameter - kerf, r, r),
+        circle(r, r + arm, (mech.shaftDiameter - kerf) / 2),
+      ],
+      width: 2 * r,
+      height: arm + 2 * r,
+    })
+  }
+
+  // Scenery plates with their mounting tabs.
+  for (const prop of spec.props ?? []) {
+    parts.push(propPart(prop, t, kerf))
+  }
+
   // Character-zone parts: every figure gets flat laser parts too, so a
   // toy can be built entirely from sheet stock (bodies laminate from
   // layers of the sheet).
@@ -728,6 +804,59 @@ function characterParts(
   return out
 }
 
+/** Scenery plate: library outline + mounting tabs, grown for kerf. */
+function propPart(prop: PropSpec, t: number, kerf: number): Part {
+  const raw = propPlateOutline(prop, t)
+  const cy = prop.height / 2
+  const grown = growRadially(
+    raw.map((pt) => ({ x: pt.x, y: pt.y - cy })),
+    kerf / 2,
+  ).map((pt) => ({ x: pt.x, y: pt.y + cy }))
+  const b = bounds(grown)
+  return {
+    name: `prop-${prop.id.replace(/^prop-/, '')}`,
+    outline: translate(grown, -b.minX, -b.minY),
+    holes: [],
+    width: b.maxX - b.minX,
+    height: b.maxY - b.minY,
+  }
+}
+
+/**
+ * Prop ids whose stage slots collide with another stage opening (a
+ * channel slot, a wall-tab slot or another prop) or leave the stage.
+ * The UI warns on these; templates and recipes must return none.
+ */
+export function propConflicts(spec: AutomatonSpec): string[] {
+  const props = spec.props ?? []
+  if (props.length === 0) return []
+  const { width: w, depth: d } = spec.frame
+  const stage = generateParts({ ...spec, props: [] }).find((p) => p.name === 'stage')!
+  const taken = stage.holes.map(bounds)
+  const MARGIN = 1.5
+  const bad: string[] = []
+  for (const prop of props) {
+    const mine = propStageSlots(spec.frame, prop).map((s) => ({
+      minX: s.x + w / 2 - s.width / 2,
+      maxX: s.x + w / 2 + s.width / 2,
+      minY: s.z + d / 2 - s.depth / 2,
+      maxY: s.z + d / 2 + s.depth / 2,
+    }))
+    const hit = mine.some((a) =>
+      taken.some(
+        (b) =>
+          a.minX < b.maxX + MARGIN &&
+          a.maxX > b.minX - MARGIN &&
+          a.minY < b.maxY + MARGIN &&
+          a.maxY > b.minY - MARGIN,
+      ),
+    )
+    if (hit || !propFitsStage(spec.frame, prop)) bad.push(prop.id)
+    taken.push(...mine)
+  }
+  return bad
+}
+
 function pathToSvg(path: Path): string {
   const d = path.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(3)},${p.y.toFixed(3)}`).join(' ')
   return `${d} Z`
@@ -736,7 +865,7 @@ function pathToSvg(path: Path): string {
 /** Render the full flat-pack SVG document (mm units, hairline cut strokes). */
 export function flatPackSvg(spec: AutomatonSpec): string {
   const parts = generateParts(spec)
-  const GAP = 8
+  const GAP = 10
   const MARGIN = 10
 
   // shelf-pack the parts into rows
@@ -771,7 +900,7 @@ export function flatPackSvg(spec: AutomatonSpec): string {
     }
     const pb = bounds(translate(part.outline, dx, dy))
     // tiny repeated parts (e.g. crown tooth tabs) get one grouped label
-    const groupMatch = /^(.*)-(\d+)$/.exec(part.name)
+    const groupMatch = /^(crown-tooth-.*)-(\d+)$/.exec(part.name)
     if (part.width < 16 && groupMatch) {
       if (groupMatch[2] === '1') {
         const count = parts.filter((q) => q.name.startsWith(`${groupMatch[1]}-`)).length
@@ -780,9 +909,21 @@ export function flatPackSvg(spec: AutomatonSpec): string {
         )
       }
     } else {
-      labels.push(
-        `<text x="${(pb.minX + pb.maxX) / 2}" y="${pb.maxY - 2}" text-anchor="middle" font-size="4">${part.name}</text>`,
-      )
+      // roomy parts carry their label inside, clear of the edge joints and
+      // the centre hole; slim parts are labelled on the scrap just below
+      if (part.width >= 30 && part.height >= 16) {
+        const ly = pb.minY + (pb.maxY - pb.minY) * 0.3
+        labels.push(
+          `<text x="${(pb.minX + pb.maxX) / 2}" y="${ly.toFixed(2)}" text-anchor="middle" font-size="4">${part.name}</text>`,
+        )
+      } else {
+        // reads top-to-bottom in the gap to the right of the part
+        const lx = (pb.maxX + 2).toFixed(2)
+        const ly = pb.minY.toFixed(2)
+        labels.push(
+          `<text x="${lx}" y="${ly}" transform="rotate(90 ${lx} ${ly})" font-size="4">${part.name}</text>`,
+        )
+      }
     }
   }
 

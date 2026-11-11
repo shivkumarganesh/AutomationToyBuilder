@@ -11,6 +11,8 @@ import { channelSignals } from '../kinematics/channels'
 import { rockerPivotY } from '../scene/rockerLayout'
 import { couplerPlateOutline, LINK_PIN_DIAMETER } from '../kinematics/linkage'
 import { DEFAULT_FIGURE_SHAPE, figureOutline } from '../model/figures'
+import { propPlateOutline } from '../scene/propLayout'
+import { generateParts, type Part } from './svgFlatPack'
 import {
   bodyBaseY,
   HINGE_HEIGHT,
@@ -84,6 +86,42 @@ function merge(geos: BufferGeometry[]): BufferGeometry {
   )
   if (!merged) throw new Error('Failed to merge part geometries')
   return merged
+}
+
+/** The box panels, by flat-pack part name. */
+const FRAME_PARTS = ['side-left', 'side-right', 'wall-front', 'wall-back', 'stage', 'bottom']
+
+/** Extrude a flat-pack part (outline + holes) into a printable plate. */
+function plateFromPart(part: Part, thickness: number): BufferGeometry {
+  const shape = new Shape()
+  shape.moveTo(part.outline[0].x, part.outline[0].y)
+  for (let i = 1; i < part.outline.length; i++) shape.lineTo(part.outline[i].x, part.outline[i].y)
+  shape.closePath()
+  for (const hole of part.holes) {
+    const h = new Shape()
+    h.moveTo(hole[0].x, hole[0].y)
+    for (let i = 1; i < hole.length; i++) h.lineTo(hole[i].x, hole[i].y)
+    h.closePath()
+    shape.holes.push(h)
+  }
+  return new ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false })
+}
+
+/**
+ * The box itself, printed as flat panels: the SAME finger-jointed
+ * outlines the laser cuts, with the kerf compensation run in reverse —
+ * a negative kerf of twice the FDM clearance shrinks every finger/tab
+ * and opens every slot/hole by the clearance, so printed panels slide
+ * together instead of needing a press.
+ */
+export function buildFramePanels(spec: AutomatonSpec): { name: string; geometry: BufferGeometry }[] {
+  const fit = { ...spec, export: { ...spec.export, kerf: -2 * spec.export.fdmClearance } }
+  return generateParts(fit)
+    .filter((p) => FRAME_PARTS.includes(p.name))
+    .map((p) => ({
+      name: `frame-${p.name}`,
+      geometry: plateFromPart(p, spec.frame.materialThickness),
+    }))
 }
 
 /** Build every printable part, laid out flat with spacing on the plate. */
@@ -371,6 +409,23 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
   // crankArm apart, a pivot axle per limb, and the WIRE CRANKS that carry
   // each channel's motion to its pins — the internal connections the 3D
   // scene shows, as printable parts with derived run lengths.
+  // The box: six flat panels, so the whole toy can come off a printer.
+  parts.push(...buildFramePanels(spec))
+
+  // Scenery plates with tabs sized to drop into the printed stage slots.
+  for (const prop of spec.props ?? []) {
+    const t = spec.frame.materialThickness
+    const pts = propPlateOutline(prop, t)
+    const shape = new Shape()
+    shape.moveTo(pts[0].x, pts[0].y)
+    for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y)
+    shape.closePath()
+    parts.push({
+      name: `prop-${prop.id.replace(/^prop-/, '')}`,
+      geometry: new ExtrudeGeometry(shape, { depth: t - 2 * clearance, bevelEnabled: false }),
+    })
+  }
+
   const signals = channelSignals(spec)
   for (const c of spec.characters) {
     if (c.kind === 'silhouette') {
@@ -595,18 +650,50 @@ function limbPlate(
   return new ExtrudeGeometry(shape, { depth: LIMB_PLATE_THICKNESS, bevelEnabled: false })
 }
 
-/** Single binary STL with all parts spaced out on the build plate. */
-export function exportStl(spec: AutomatonSpec): DataView {
-  const parts = buildPrintParts(spec)
-  const root = new Object3D()
-  let cursorX = 0
-  for (const part of parts) {
+/** Row width the print layout wraps at — a common 220 mm bed. */
+export const PRINT_PLATE_WIDTH = 220
+const PRINT_GAP = 8
+
+export interface PlacedPrintPart {
+  name: string
+  geometry: BufferGeometry
+  /** Translation that rests the part on the plate at its packed spot. */
+  position: [number, number, number]
+}
+
+/**
+ * Shelf-pack the printable parts into rows no wider than a common bed,
+ * every part resting on Z = 0. The STL and the on-screen plate preview
+ * share this layout.
+ */
+export function layoutPrintParts(spec: AutomatonSpec): PlacedPrintPart[] {
+  const placed: PlacedPrintPart[] = []
+  let x = 0
+  let y = 0
+  let rowDepth = 0
+  for (const part of buildPrintParts(spec)) {
     part.geometry.computeBoundingBox()
     const bb = part.geometry.boundingBox!
+    const w = bb.max.x - bb.min.x
+    const d = bb.max.y - bb.min.y
+    if (x > 0 && x + w > PRINT_PLATE_WIDTH) {
+      x = 0
+      y += rowDepth + PRINT_GAP
+      rowDepth = 0
+    }
+    placed.push({ ...part, position: [x - bb.min.x, y - bb.min.y, -bb.min.z] })
+    x += w + PRINT_GAP
+    rowDepth = Math.max(rowDepth, d)
+  }
+  return placed
+}
+
+/** Single binary STL with all parts packed in rows on the build plate. */
+export function exportStl(spec: AutomatonSpec): DataView {
+  const root = new Object3D()
+  for (const part of layoutPrintParts(spec)) {
     const mesh = new Mesh(part.geometry)
-    // rest the part on the plate and step along X with a gap
-    mesh.position.set(cursorX - bb.min.x, -bb.min.y, -bb.min.z)
-    cursorX += bb.max.x - bb.min.x + 10
+    mesh.position.set(...part.position)
     root.add(mesh)
   }
   root.updateMatrixWorld(true)

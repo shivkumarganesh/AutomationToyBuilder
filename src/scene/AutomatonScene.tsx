@@ -16,6 +16,7 @@ import { Linkage } from './mechanism/Linkage'
 import { FigureBlock } from './character/FigureBlock'
 import { ArticulatedFigure } from './character/ArticulatedFigure'
 import { SilhouetteFigure } from './character/SilhouetteFigure'
+import { Prop } from './scenery/Prop'
 
 /**
  * The 3D view, composed as the two zones joined by the frame:
@@ -26,7 +27,7 @@ export function AutomatonScene() {
   const channels = useChannels()
 
   return (
-    <Canvas shadows camera={{ position: [190, 160, 210], fov: 40 }}>
+    <Canvas shadows camera={{ position: [215, 185, 250], fov: 40 }}>
       <color attach="background" args={['#191d24']} />
       <ambientLight intensity={0.55} />
       <directionalLight position={[120, 220, 140]} intensity={1.4} />
@@ -101,6 +102,13 @@ export function AutomatonScene() {
         })}
       </group>
 
+      {/* scenery — static plates in the front/back rows of the stage */}
+      <group name="scenery">
+        {(spec.props ?? []).map((prop) => (
+          <Prop key={prop.id} prop={prop} />
+        ))}
+      </group>
+
       <Grid
         position={[0, -0.01, 0]}
         args={[600, 600]}
@@ -111,7 +119,7 @@ export function AutomatonScene() {
         fadeDistance={550}
         infiniteGrid
       />
-      <OrbitControls target={[0, 60, 0]} makeDefault />
+      <OrbitControls target={[0, 72, 0]} makeDefault />
     </Canvas>
   )
 }

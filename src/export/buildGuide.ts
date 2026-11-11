@@ -1,0 +1,465 @@
+import type { AutomatonSpec } from '../model/types'
+import { interiorWidth, outputChannels } from '../model/types'
+import { FIGURE_SHAPES } from '../model/figures'
+import { PROP_SHAPES } from '../model/props'
+import { flatPackSvg, generateParts, pushrodLayers } from './svgFlatPack'
+import { buildPrintParts } from './stlExport'
+
+/**
+ * The build guide: everything a maker needs besides the cut/print file —
+ * a parts list, a shopping list, and assembly steps — generated from
+ * the SAME spec and the SAME part generators as the exports, so the
+ * guide can never describe a part the file does not contain.
+ */
+
+export type BuildMethod = 'laser' | 'print'
+
+export type PartGroup = 'Box' | 'Mechanism' | 'Figures' | 'Scenery'
+
+export interface PartRow {
+  /** Label as engraved on the sheet / named in the STL. */
+  name: string
+  /** What the part is, in plain words. */
+  label: string
+  qty: number
+  /** Bounding size, mm. */
+  size: string
+  group: PartGroup
+}
+
+export interface HardwareRow {
+  item: string
+  detail: string
+}
+
+export interface GuideStep {
+  title: string
+  body: string[]
+}
+
+export interface BuildGuide {
+  method: BuildMethod
+  parts: PartRow[]
+  hardware: HardwareRow[]
+  tools: string[]
+  steps: GuideStep[]
+  /** Laser: sheet area the flat-pack needs. Print: largest part footprint. */
+  footprint: { width: number; height: number }
+}
+
+function groupOf(name: string): PartGroup {
+  if (/^(frame-)?(side-|wall-|stage|bottom)/.test(name)) return 'Box'
+  if (name.startsWith('prop-')) return 'Scenery'
+  if (/^(figure-|limb-|axle-|wire-|hinge-stand|body-|stand-)/.test(name)) return 'Figures'
+  return 'Mechanism'
+}
+
+const LABELS: [RegExp, string][] = [
+  [/^(frame-)?side-/, 'Side wall (carries the shaft)'],
+  [/^(frame-)?wall-/, 'Front / back wall'],
+  [/^(frame-)?stage/, 'Stage plate (top)'],
+  [/^(frame-)?bottom/, 'Floor panel'],
+  [/^camshaft/, 'Camshaft'],
+  [/^layshaft/, 'Layshaft (second shaft)'],
+  [/^crank/, 'Crank'],
+  [/^pushrod-/, 'Pushrod'],
+  [/^cam-/, 'Cam'],
+  [/^gear-|^drive-gear|^driven-gear/, 'Gear'],
+  [/^rocker-lever/, 'Rocker lever'],
+  [/^rocker-post/, 'Rocker fulcrum post'],
+  [/^rocker-link/, 'Rocker link rod'],
+  [/^geneva-wheel/, 'Geneva wheel'],
+  [/^geneva-driver/, 'Geneva driver'],
+  [/^geneva-pin/, 'Geneva drive pin'],
+  [/^spinner-platform/, 'Turntable platform'],
+  [/^spinner-wheel/, 'Friction drive wheel'],
+  [/^spinner-spindle/, 'Spindle with platform'],
+  [/^pinion/, 'Pinion gear'],
+  [/^crown-tooth/, 'Crown gear tooth'],
+  [/^crown/, 'Crown gear'],
+  [/^linkage-crank/, 'Linkage crank disc'],
+  [/^linkage-coupler/, 'Linkage coupler with wand'],
+  [/^linkage-rocker/, 'Linkage rocker bar'],
+  [/^linkage-post/, 'Linkage pivot post'],
+  [/^linkage-pin/, 'Linkage pin'],
+  [/^hinge-stand/, 'Hinge stand'],
+  [/^figure-/, 'Figure'],
+  [/^prop-/, 'Scenery'],
+  [/^axle-/, 'Limb axle'],
+  [/^wire-/, 'Limb wire crank'],
+  [/^limb-/, 'Limb plate'],
+]
+
+function labelOf(name: string): string {
+  return LABELS.find(([re]) => re.test(name))?.[1] ?? 'Part'
+}
+
+/** Collapse laminations / numbered repeats into one row with a quantity. */
+function baseName(name: string): string {
+  return name.replace(/-layer\d+$/, '').replace(/^(crown-tooth-.*)-\d+$/, '$1')
+}
+
+function collect(raw: { name: string; w: number; h: number }[]): PartRow[] {
+  const rows = new Map<string, PartRow>()
+  for (const p of raw) {
+    const key = baseName(p.name)
+    const row = rows.get(key)
+    if (row) row.qty++
+    else
+      rows.set(key, {
+        name: key,
+        label: labelOf(key),
+        qty: 1,
+        size: `${Math.round(p.w)} × ${Math.round(p.h)}`,
+        group: groupOf(key),
+      })
+  }
+  const order: PartGroup[] = ['Box', 'Mechanism', 'Figures', 'Scenery']
+  return [...rows.values()].sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group))
+}
+
+/** Everything on the shaft, left to right, with its distance from the left inner wall. */
+export function shaftOrder(spec: AutomatonSpec): { what: string; mm: number }[] {
+  const inner = interiorWidth(spec.frame)
+  const m = spec.mechanism
+  const items: { what: string; position: number }[] = [
+    ...m.cams
+      .filter((c) => c.shaft !== 'lay')
+      .map((c) => ({ what: `${c.kind} cam “${c.id}”`, position: c.position })),
+    ...m.spinners.map((s) => ({
+      what:
+        s.drive === 'bevel'
+          ? `crown gear for “${s.id}”`
+          : s.drive === 'geneva'
+            ? `Geneva driver for “${s.id}”`
+            : `friction wheel for “${s.id}”`,
+      position: s.position,
+    })),
+    ...(m.linkages ?? []).map((l) => ({
+      what: `linkage crank disc “${l.id}”`,
+      position: l.position,
+    })),
+    ...(m.gearTrain ? [{ what: 'drive gear', position: m.gearTrain.position }] : []),
+  ]
+  return items
+    .sort((a, b) => a.position - b.position)
+    .map((i) => ({ what: i.what, mm: Math.round(i.position * inner) }))
+}
+
+export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide {
+  const { frame, mechanism: m } = spec
+  const t = frame.materialThickness
+  const channels = outputChannels(spec)
+  const laser = method === 'laser'
+  const articulated = spec.characters.filter((c) => c.kind === 'articulated')
+  const shaftLen = frame.width + 24
+
+  // ---- parts, straight from the generators ----
+  let parts: PartRow[]
+  let footprint: { width: number; height: number }
+  if (laser) {
+    parts = collect(generateParts(spec).map((p) => ({ name: p.name, w: p.width, h: p.height })))
+    const svg = flatPackSvg(spec)
+    const size = /width="([\d.]+)mm" height="([\d.]+)mm"/.exec(svg)
+    footprint = { width: Math.ceil(Number(size?.[1] ?? 0)), height: Math.ceil(Number(size?.[2] ?? 0)) }
+  } else {
+    const built = buildPrintParts(spec).map((p) => {
+      p.geometry.computeBoundingBox()
+      const bb = p.geometry.boundingBox!
+      const dims = [bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z].sort(
+        (a, b) => b - a,
+      )
+      return { name: p.name, w: dims[0], h: dims[1] }
+    })
+    parts = collect(built)
+    footprint = {
+      width: Math.ceil(Math.max(...built.map((p) => p.w))),
+      height: Math.ceil(Math.max(...built.map((p) => p.h))),
+    }
+  }
+
+  // ---- shopping list ----
+  const hardware: HardwareRow[] = []
+  if (laser) {
+    hardware.push({
+      item: `${t} mm plywood or MDF sheet`,
+      detail: `All parts nest in about ${footprint.width} × ${footprint.height} mm.`,
+    })
+    hardware.push({
+      item: `${m.shaftDiameter} mm round dowel, ${shaftLen} mm long`,
+      detail:
+        'The camshaft. Sand a flat along it to match the D-shaped holes (or glue the cams where the guide says).',
+    })
+    hardware.push({
+      item: `${m.shaftDiameter} mm dowel offcut, ${m.crank.handleLength} mm`,
+      detail: 'The crank handle — presses into the round hole of the crank arm.',
+    })
+    if (m.gearTrain)
+      hardware.push({
+        item: `${m.shaftDiameter} mm round dowel, ${frame.width + 4} mm long`,
+        detail: 'The layshaft, in the lower pair of bearing holes.',
+      })
+    for (const sp of m.spinners)
+      hardware.push({
+        item: `6 mm dowel, about ${Math.round(frame.height + t + 12 - m.shaftHeight)} mm`,
+        detail: `Spindle for “${sp.id}”: from the drive up through the stage to the platform. Trim to fit.`,
+      })
+    if ((m.linkages ?? []).length > 0)
+      hardware.push({
+        item: `3 mm pins × ${(m.linkages ?? []).length * 3}`,
+        detail: 'Linkage pivots — bamboo skewer or 3 mm dowel, about 10 mm each.',
+      })
+    if (m.rockers.length > 0)
+      hardware.push({
+        item: `Small pins or brads × ${m.rockers.length * 2}`,
+        detail: 'Rocker pivots: lever on its post, and the figure on its hinge stand.',
+      })
+    if (articulated.length > 0)
+      hardware.push({
+        item: '2 mm steel or brass wire, about 300 mm',
+        detail: 'Bent into the limb cranks. Plus 3 mm dowel for the limb axles.',
+      })
+    hardware.push({ item: 'Wood glue (PVA)', detail: 'For the box joints, laminations and figures.' })
+    hardware.push({
+      item: 'Candle wax or dry soap',
+      detail: 'Rubbed on cam edges and inside guide slots so everything glides.',
+    })
+  } else {
+    hardware.push({
+      item: 'PLA or PETG filament, roughly 150–250 g',
+      detail: `Every part prints flat without supports. Largest part: ${footprint.width} × ${footprint.height} mm.`,
+    })
+    if (m.rockers.length > 0)
+      hardware.push({
+        item: `Small pins × ${m.rockers.length * 2}`,
+        detail:
+          'Rocker pivots: lever on its post, and the figure on its hinge stand. Offcuts of 1.75 mm filament work well.',
+      })
+    else
+      hardware.push({
+        item: 'Nothing else to buy',
+        detail: 'The box, shaft, crank and every moving part are in the STL.',
+      })
+    hardware.push({
+      item: 'Superglue (optional)',
+      detail: 'A drop on the box joints and figures once everything runs freely.',
+    })
+    hardware.push({
+      item: 'Candle wax or dry lubricant',
+      detail: 'On cam edges and in guide slots for a smooth, quiet crank.',
+    })
+  }
+
+  const tools = laser
+    ? ['Laser cutter (or a cutting service)', 'Fine sandpaper', 'Small saw for the dowels', 'Clamps or masking tape']
+    : ['FDM 3D printer', 'Flush cutters or a craft knife', 'Fine sandpaper or a small file']
+
+  // ---- assembly ----
+  const steps: GuideStep[] = []
+
+  steps.push(
+    laser
+      ? {
+          title: 'Cut the parts',
+          body: [
+            `Load ${t} mm sheet and cut the SVG: red lines are cuts, blue text is engraved labels (or skip the engraving).`,
+            `The file is compensated for a ${spec.export.kerf} mm kerf. If joints come out loose or too tight, change the kerf setting and re-export.`,
+            'Lightly sand the scorched edges. Keep the small parts together in a tray.',
+          ],
+        }
+      : {
+          title: 'Print the parts',
+          body: [
+            'Slice the STL as it is laid out: every part already lies flat on the bed. If the plate is too small, split the parts in your slicer and print in batches.',
+            '0.2 mm layers, 3 walls, 20% infill, no supports.',
+            `Holes carry ${spec.export.fdmClearance} mm clearance. If parts are too tight or too loose on your printer, change the clearance setting and re-export.`,
+          ],
+        },
+  )
+
+  const pushrods = channels.filter((c) => c.kind === 'lift')
+  if (laser && pushrods.length > 0) {
+    const layers = pushrodLayers(pushrods[0].kind === 'lift' ? pushrods[0].pushrod.rodWidth : 6, t)
+    if (layers > 1)
+      steps.push({
+        title: 'Laminate the pushrods',
+        body: [
+          `Each pushrod is ${layers} identical T-shaped layers. Glue them face to face, edges flush, and clamp until dry.`,
+          'Sand the rod lightly so it slides freely through its square stage slot.',
+        ],
+      })
+  }
+
+  steps.push({
+    title: 'Dry-fit the box',
+    body: [
+      'Slot the two side walls (the ones with the round bearing holes) into the front and back walls. The finger joints only fit one way.',
+      'Drop the floor panel inside. Leave the stage plate off for now and do not glue anything yet.',
+    ],
+  })
+
+  const order = shaftOrder(spec)
+  steps.push({
+    title: 'Load the camshaft',
+    body: [
+      'Push the shaft through the left side wall, thread the parts on in this order, then push the shaft on through the right wall:',
+      ...order.map(
+        (o, i) => `${i + 1}. ${o.what} — centre ${o.mm} mm from the inside of the left wall`,
+      ),
+      'The D-shaped holes lock each part to the flat on the shaft, so the timing between cams is set for you.',
+      'Leave about 12 mm of shaft sticking out on the crank side.',
+    ],
+  })
+
+  if (m.gearTrain)
+    steps.push({
+      title: 'Fit the layshaft',
+      body: [
+        'Thread the driven gear and any layshaft cams onto the second shaft, in the lower bearing holes.',
+        'Line the two gears up so their teeth mesh along the full width. They should turn without binding.',
+      ],
+    })
+
+  for (const ch of channels) {
+    if (ch.kind === 'lift')
+      steps.push({
+        title: `Pushrod “${ch.id}”`,
+        body: [
+          `Stand the pushrod on cam “${ch.cam.id}” with its flat pad resting on the cam edge.`,
+          'When the stage goes on, the rod passes up through the matching square slot.',
+        ],
+      })
+    else if (ch.kind === 'tilt')
+      steps.push({
+        title: `Rocker “${ch.id}”`,
+        body: [
+          'Glue the fulcrum post to the floor. Pin the lever to the top of the post so it see-saws freely.',
+          `Rest the lever's pad on cam “${ch.cam.id}”. Hook the link rod to the lever; it rises through the stage slot to push the figure.`,
+        ],
+      })
+    else if (ch.kind === 'spin')
+      steps.push({
+        title: `Turntable “${ch.id}”`,
+        body: [
+          ch.spinner.drive === 'bevel'
+            ? 'Fit the pinion to the bottom of the spindle so its teeth mesh with the crown gear on the camshaft.'
+            : ch.spinner.drive === 'geneva'
+              ? 'Fit the Geneva wheel to the bottom of the spindle so the driver pin enters a slot once per crank turn.'
+              : 'Fit the driven disc to the bottom of the spindle so it rests on the rim of the friction wheel.',
+          'The spindle runs up through the round hole in the stage; the platform goes on top once the stage is fitted.',
+        ],
+      })
+    else
+      steps.push({
+        title: `Linkage “${ch.id}”`,
+        body: [
+          'Glue the pivot post to the floor behind the shaft. Pin the rocker bar to the top of the post.',
+          'Pin the coupler to the crank disc and to the free end of the rocker bar. All three pins must turn freely.',
+          'The wand on the coupler rises through the long slot in the stage and carries the figure.',
+        ],
+      })
+  }
+
+  steps.push({
+    title: 'Fit the stage and test',
+    body: [
+      'Lower the stage plate over the rods, spindles and wands and press it onto the wall tabs.',
+      'Push the crank arm onto the shaft end, fit the handle, and turn slowly. Everything should move without sticking.',
+      'If something binds: sand the slot or rod a little and add wax. Do not glue the stage until it all runs smoothly.',
+    ],
+  })
+
+  if (spec.characters.length > 0) {
+    const body: string[] = []
+    for (const c of spec.characters) {
+      const ch = channels.find((x) => x.id === c.channelId)
+      const what =
+        c.kind === 'silhouette'
+          ? `the ${FIGURE_SHAPES[c.shape ?? '']?.label.toLowerCase() ?? 'figure'} “${c.label}”`
+          : `“${c.label}”`
+      if (!ch) continue
+      if (c.kind === 'articulated')
+        body.push(
+          `Build ${what}: glue the body to its stand over “${ch.id}”, push the axles through the body, fit the limb plates, and hook each wire crank from its rod to the limb pin.`,
+        )
+      else if (ch.kind === 'lift') body.push(`Glue ${what} to the top of pushrod “${ch.id}”.`)
+      else if (ch.kind === 'tilt')
+        body.push(
+          `Glue the hinge stand to the stage, pin ${what} to it, and rest the figure on the link rod of “${ch.id}”.`,
+        )
+      else if (ch.kind === 'spin') body.push(`Glue ${what} onto the platform of “${ch.id}”.`)
+      else body.push(`Glue ${what} to the tip of the wand of “${ch.id}”.`)
+    }
+    steps.push({ title: 'Mount the figures', body })
+  }
+
+  if ((spec.props ?? []).length > 0)
+    steps.push({
+      title: 'Add the scenery',
+      body: [
+        ...(spec.props ?? []).map(
+          (p) =>
+            `Press the ${PROP_SHAPES[p.shape]?.label.toLowerCase() ?? 'prop'} tabs into the ${p.row} row of stage slots.`,
+        ),
+        'Turn the crank once more to check no figure touches the scenery.',
+      ],
+    })
+
+  steps.push({
+    title: 'Glue and finish',
+    body: [
+      'When it runs smoothly, take the stage off once more, glue the box joints, and refit it.',
+      laser
+        ? 'Paint or stain the figures and scenery — acrylics work well on plywood.'
+        : 'Paint the figures and scenery, or reprint them in coloured filament.',
+      'Turn the crank and enjoy!',
+    ],
+  })
+
+  return { method, parts, hardware, tools, steps, footprint }
+}
+
+/** The whole guide as a self-contained printable HTML page. */
+export function guideHtml(spec: AutomatonSpec, method: BuildMethod): string {
+  const g = buildGuide(spec, method)
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const groups = [...new Set(g.parts.map((p) => p.group))]
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>${esc(spec.name)} — build guide</title>
+<style>
+body{font:14px/1.5 system-ui,sans-serif;color:#222;max-width:780px;margin:32px auto;padding:0 20px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:17px;margin:28px 0 8px;border-bottom:2px solid #e0a54f;padding-bottom:4px}
+h3{font-size:14px;margin:14px 0 4px}.sub{color:#666;margin:0 0 16px}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:4px 8px;border-bottom:1px solid #ddd;font-size:13px}
+th{background:#f5f0e6}ol.steps>li{margin-bottom:14px;break-inside:avoid}ol.steps>li>b{font-size:15px}
+ul{margin:4px 0;padding-left:20px}.box{display:inline-block;width:12px;height:12px;border:1.5px solid #555;margin-right:6px;vertical-align:-2px}
+@media print{body{margin:0}h2{break-after:avoid}}
+</style></head><body>
+<h1>${esc(spec.name)}</h1>
+<p class="sub">Build guide · ${g.method === 'laser' ? 'laser-cut' : '3D-printed'} · box ${spec.frame.width} × ${spec.frame.depth} × ${spec.frame.height} mm</p>
+<h2>What you need</h2>
+<table><tr><th>Item</th><th>Notes</th></tr>
+${g.hardware.map((h) => `<tr><td><span class="box"></span>${esc(h.item)}</td><td>${esc(h.detail)}</td></tr>`).join('\n')}
+</table>
+<h3>Tools</h3><ul>${g.tools.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
+<h2>Parts (${g.parts.reduce((n, p) => n + p.qty, 0)})</h2>
+${groups
+  .map(
+    (group) => `<h3>${group}</h3><table><tr><th>Part</th><th>Name</th><th>Qty</th><th>Size (mm)</th></tr>
+${g.parts
+  .filter((p) => p.group === group)
+  .map(
+    (p) =>
+      `<tr><td><span class="box"></span>${esc(p.label)}</td><td>${esc(p.name)}</td><td>${p.qty}</td><td>${p.size}</td></tr>`,
+  )
+  .join('\n')}
+</table>`,
+  )
+  .join('\n')}
+<h2>Assembly</h2>
+<ol class="steps">
+${g.steps.map((s) => `<li><b>${esc(s.title)}</b><ul>${s.body.map((b) => `<li>${esc(b)}</li>`).join('')}</ul></li>`).join('\n')}
+</ol>
+</body></html>`
+}
