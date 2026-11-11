@@ -9,6 +9,8 @@ import type { BuildMethod } from '../export/buildGuide'
 
 export type View = 'home' | 'design' | 'make'
 export type EditMode = 'simple' | 'advanced'
+/** How the toy is dressed on screen (the cut files are the same either way). */
+export type Finish = 'painted' | 'natural' | 'walnut'
 
 const KEY = 'automaton-designer.ui.v1'
 const SPEC_KEY = 'automaton-designer.spec.v1'
@@ -16,16 +18,20 @@ const SPEC_KEY = 'automaton-designer.spec.v1'
 interface Persisted {
   mode: EditMode
   method: BuildMethod
+  finish: Finish
+  sound: boolean
 }
 
 function loadPersisted(): Persisted {
-  const fallback: Persisted = { mode: 'simple', method: 'laser' }
+  const fallback: Persisted = { mode: 'simple', method: 'laser', finish: 'painted', sound: true }
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<Persisted> | null
     if (!raw) return fallback
     return {
       mode: raw.mode === 'advanced' ? 'advanced' : 'simple',
       method: raw.method === 'print' ? 'print' : 'laser',
+      finish: raw.finish === 'natural' || raw.finish === 'walnut' ? raw.finish : 'painted',
+      sound: raw.sound !== false,
     }
   } catch {
     return fallback
@@ -48,13 +54,15 @@ interface UiState extends Persisted {
   setView: (view: View) => void
   setMode: (mode: EditMode) => void
   setMethod: (method: BuildMethod) => void
+  setFinish: (finish: Finish) => void
+  setSound: (on: boolean) => void
 }
 
 export const useUiStore = create<UiState>((set, get) => {
   const save = () => {
     try {
-      const { mode, method } = get()
-      localStorage.setItem(KEY, JSON.stringify({ mode, method }))
+      const { mode, method, finish, sound } = get()
+      localStorage.setItem(KEY, JSON.stringify({ mode, method, finish, sound }))
     } catch {
       // storage blocked — preference just won't stick
     }
@@ -69,6 +77,14 @@ export const useUiStore = create<UiState>((set, get) => {
     },
     setMethod: (method) => {
       set({ method })
+      save()
+    },
+    setFinish: (finish) => {
+      set({ finish })
+      save()
+    },
+    setSound: (sound) => {
+      set({ sound })
       save()
     },
   }

@@ -1,4 +1,6 @@
 import { useDesignerStore } from '../model/store'
+import { useUiStore, type Finish } from './uiStore'
+import { unlockSound } from './sound'
 
 /** Play/scrub controls for the crank simulation, overlaid on the 3D view. */
 export function CrankControls() {
@@ -8,11 +10,23 @@ export function CrankControls() {
   const seeThrough = useDesignerStore((s) => s.seeThrough)
   const { setCranking, setCrankSpeed, setCrankAngle, setSeeThrough } = useDesignerStore()
 
+  const finish = useUiStore((s) => s.finish)
+  const setFinish = useUiStore((s) => s.setFinish)
+  const sound = useUiStore((s) => s.sound)
+  const setSound = useUiStore((s) => s.setSound)
+
   const deg = Math.round((crankAngle * 180) / Math.PI) % 360
 
   return (
     <div className="crank-controls">
-      <button className="primary" onClick={() => setCranking(!isCranking)}>
+      <button
+        className="primary"
+        title="Or grab the red handle in the 3D view and turn it yourself"
+        onClick={() => {
+          unlockSound()
+          setCranking(!isCranking)
+        }}
+      >
         {isCranking ? '⏸ Stop crank' : '▶ Turn crank'}
       </button>
       <label>
@@ -47,6 +61,25 @@ export function CrankControls() {
           onChange={(e) => setSeeThrough(e.target.checked)}
         />
         See through
+      </label>
+      <label title="Wooden ticks and knocks as the mechanism moves">
+        <input
+          type="checkbox"
+          checked={sound}
+          onChange={(e) => {
+            unlockSound()
+            setSound(e.target.checked)
+          }}
+        />
+        Sound
+      </label>
+      <label title="How the toy is finished on screen — the cut files are the same">
+        Finish
+        <select value={finish} onChange={(e) => setFinish(e.target.value as Finish)}>
+          <option value="painted">Painted</option>
+          <option value="natural">Natural basswood</option>
+          <option value="walnut">Walnut stain</option>
+        </select>
       </label>
     </div>
   )

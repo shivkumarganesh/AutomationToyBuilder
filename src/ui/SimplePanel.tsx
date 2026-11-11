@@ -511,8 +511,8 @@ export function SimplePanel() {
             )}
           <AddFigure />
           <p className="hint">
-            Drag the 3D view to look around. Tick “See through” to watch the mechanism
-            inside the box.
+            Grab the red handle and turn it yourself, or drag anywhere else to look around.
+            Tick “See through” to watch the mechanism inside the box.
           </p>
         </div>
       </details>

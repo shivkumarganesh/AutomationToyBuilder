@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { Grid, OrbitControls } from '@react-three/drei'
+import { OrbitControls } from '@react-three/drei'
 import { useDesignerStore } from '../model/store'
 import { camWorldX } from '../model/types'
 import { useChannels } from './useChannels'
@@ -19,6 +19,8 @@ import { ArticulatedFigure } from './character/ArticulatedFigure'
 import { SilhouetteFigure } from './character/SilhouetteFigure'
 import { Prop } from './scenery/Prop'
 import { FlyerFigure } from './character/FlyerFigure'
+import { Workbench, WoodFinish } from './Workshop'
+import { SoundDriver } from './SoundDriver'
 
 /**
  * The 3D view, composed as the two zones joined by the frame:
@@ -35,13 +37,15 @@ export function AutomatonScene() {
 
   return (
     <Canvas shadows camera={{ position: startCamera, fov: 40 }}>
-      <color attach="background" args={['#191d24']} />
-      <ambientLight intensity={0.55} />
-      <directionalLight position={[120, 220, 140]} intensity={1.4} />
-      <directionalLight position={[-140, 90, -100]} intensity={0.4} />
+      <color attach="background" args={['#231a13']} />
+      <Workbench />
+      <WoodFinish />
 
       <CrankDriver />
-      <FrameBox />
+      <SoundDriver signals={channels} />
+      <group name="frame">
+        <FrameBox />
+      </group>
 
       {/* mechanism zone — inside the box */}
       <group name="mechanism">
@@ -119,17 +123,7 @@ export function AutomatonScene() {
         ))}
       </group>
 
-      <Grid
-        position={[0, -0.01, 0]}
-        args={[600, 600]}
-        cellSize={20}
-        cellColor="#2c333f"
-        sectionSize={100}
-        sectionColor="#3a4250"
-        fadeDistance={550}
-        infiniteGrid
-      />
-      <OrbitControls target={[0, 72, 0]} makeDefault />
+      <OrbitControls target={[0, 72, 0]} makeDefault maxPolarAngle={Math.PI / 2 - 0.03} minDistance={120} maxDistance={900} />
     </Canvas>
   )
 }
