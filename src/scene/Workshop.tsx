@@ -51,6 +51,8 @@ function grainTexture(seed: number, contrast: number): CanvasTexture {
 
 const BASSWOOD = new Color('#e2c79c')
 const WALNUT = new Color('#7a5236')
+/** The colour of a laser-cut edge. */
+const CHAR = new Color('#3a2212')
 
 /** Colour a part takes under a finish, from its painted colour and its zone. */
 function finished(base: Color, zone: string, finish: Finish): Color {
@@ -68,7 +70,7 @@ function finished(base: Color, zone: string, finish: Finish): Color {
  * no part component needs to know about finishes — and it never touches
  * geometry, so what is rendered is still exactly what is exported.
  */
-export function WoodFinish({ shadeSides = false }: { shadeSides?: boolean }) {
+export function WoodFinish({ shadeSides = true }: { shadeSides?: boolean }) {
   const scene = useThree((s) => s.scene)
   const invalidate = useThree((s) => s.invalidate)
   const finish = useUiStore((s) => s.finish)
@@ -141,7 +143,9 @@ export function WoodFinish({ shadeSides = false }: { shadeSides?: boolean }) {
             side = mat.clone()
             sides.current.set(obj, side)
           }
-          side.color.copy(mat.color).multiplyScalar(0.8)
+          // a laser leaves the cut edge scorched dark brown; paint hides it
+          if (finish === 'painted') side.color.copy(mat.color).multiplyScalar(0.8)
+          else side.color.copy(mat.color).lerp(CHAR, zone === 'mechanism' ? 0.35 : 0.62)
           side.opacity = mat.opacity
           side.map = map
           side.bumpMap = map

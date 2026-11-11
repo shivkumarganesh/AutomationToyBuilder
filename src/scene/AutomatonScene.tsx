@@ -145,7 +145,7 @@ export function AutomatonScene({ studio = false }: { studio?: boolean }) {
     >
       <color attach="background" args={[studio ? '#e7e8ea' : '#231a13']} />
       {studio ? <StudioLight /> : <Workbench />}
-      <WoodFinish shadeSides={studio} />
+      <WoodFinish />
       {studio && <GeometryJanitor />}
       {studio && <ZoomBridge home={3.2 * radius} />}
       {studio ? <Rig>{content}</Rig> : content}

@@ -138,16 +138,17 @@ describe('every shipped toy is buildable from 3 mm basswood', () => {
   })
 })
 
-describe('detail survives the trip to the sheet', () => {
-  it('a figure with a raised layer cuts two detail plates and scores their footprint', async () => {
+describe('detail and depth survive the trip to the sheet', () => {
+  it('a flat figure: detail plates are cut twice and their footprint is scored', async () => {
     const { flatPackSvg } = await import('./svgFlatPack')
     const { buildPrintParts } = await import('./stlExport')
     const { FIGURE_SHAPES } = await import('../model/figures')
     const spec = composeToy('whale', 'bob')
+    spec.characters[0].relief = 0
     const whale = FIGURE_SHAPES.whale
     const parts = generateParts(spec)
     const figure = parts.find((p) => p.name === 'figure-figure-whale')!
-    // scored: every engraved line + one closed footprint per layer
+    // scored: every engraved line + one closed footprint per detail plate
     expect(figure.engrave).toHaveLength(whale.engrave!.length + whale.layers!.length)
     for (const line of figure.engrave!)
       for (const p of line) {
@@ -159,15 +160,119 @@ describe('detail survives the trip to the sheet', () => {
     const details = parts.filter((p) => p.name.startsWith('detail-figure-whale-'))
     expect(details).toHaveLength(whale.layers!.length * 2)
     for (const d of details) expect(auditPart(d)).toEqual([])
+    expect(parts.some((p) => p.name.startsWith('depth-'))).toBe(false)
     const svg = flatPackSvg(spec)
     const score = /<g id="score"[^>]*>([\s\S]*?)<\/g>/.exec(svg)![1]
     expect((score.match(/<path /g) ?? []).length).toBe(figure.engrave!.length)
     // scored lines are open paths: never a closed cut
     expect(score).not.toContain(' Z')
-    // printed: the layer is raised relief on the figure itself
+    // printed: one piece, the detail plate as raised relief
     const printed = buildPrintParts(spec).find((p) => p.name === 'figure-figure-whale')!
     printed.geometry.computeBoundingBox()
     const bb = printed.geometry.boundingBox!
     expect(bb.max.z - bb.min.z).toBeCloseTo(4 + 1.2, 3)
+  })
+
+  it('a figure with depth: every level is cut for both faces, and nothing scored is lost or buried', async () => {
+    const { figureStack } = await import('../scene/reliefLayout')
+    const { FIGURE_SHAPES } = await import('../model/figures')
+    const spec = composeToy('whale', 'bob')
+    const c = spec.characters[0]
+    expect(c.relief).toBe(2)
+    const stack = figureStack(c)
+    expect(stack.levels).toHaveLength(2)
+    const parts = generateParts(spec)
+    const plates = stack.levels.reduce((n, l) => n + l.length, 0)
+    const depth = parts.filter((p) => p.name.startsWith(`depth-${c.id}-`))
+    expect(depth).toHaveLength(plates * 2)
+    expect(depth.filter((p) => p.name.endsWith('-front'))).toHaveLength(plates)
+    for (const p of depth) expect(auditPart(p)).toEqual([])
+    // level 1 is scored on the base; level 2 on level 1
+    const figure = parts.find((p) => p.name === `figure-${c.id}`)!
+    const closedLoops = (part: typeof figure) =>
+      (part.engrave ?? []).filter((l) => {
+        const a = l[0]
+        const b = l[l.length - 1]
+        return l.length > 6 && Math.hypot(a.x - b.x, a.y - b.y) < 1e-6
+      }).length
+    expect(closedLoops(figure)).toBeGreaterThanOrEqual(stack.levels[0].length)
+    const l1 = parts.find((p) => p.name === `depth-${c.id}-L1-front`)!
+    expect(closedLoops(l1)).toBeGreaterThanOrEqual(stack.levels[1].length)
+    // every scored run of the stack ends up on exactly one front plate or the base
+    const scoredSomewhere = [figure, ...depth.filter((p) => p.name.endsWith('-front'))].reduce(
+      (n, p) => n + (p.engrave ?? []).length,
+      0,
+    )
+    expect(scoredSomewhere).toBe(stack.scores.length)
+    const whale = FIGURE_SHAPES.whale
+    expect(stack.scores.length).toBeGreaterThanOrEqual(whale.engrave!.length + whale.layers!.length + plates)
+    // marks stay on their plate
+    for (const p of [figure, ...depth])
+      for (const line of p.engrave ?? [])
+        for (const q of line) {
+          expect(q.x).toBeGreaterThanOrEqual(-0.3)
+          expect(q.x).toBeLessThanOrEqual(p.width + 0.3)
+          expect(q.y).toBeGreaterThanOrEqual(-0.3)
+          expect(q.y).toBeLessThanOrEqual(p.height + 0.3)
+        }
+  })
+
+  it('printed with depth: two mirrored halves, each a dome on a flat back', async () => {
+    const { buildPrintParts } = await import('./stlExport')
+    const spec = composeToy('whale', 'bob')
+    const c = spec.characters[0]
+    const halves = buildPrintParts(spec).filter((p) => p.name.startsWith(`figure-${c.id}-half`))
+    expect(halves.map((h) => h.name).sort()).toEqual([`figure-${c.id}-half1`, `figure-${c.id}-half2`])
+    const boxes = halves.map((h) => {
+      h.geometry.computeBoundingBox()
+      return h.geometry.boundingBox!
+    })
+    for (const bb of boxes) {
+      expect(bb.min.z).toBeCloseTo(0, 6) // flat on the bed
+      // 2 mm half-plate + two levels of dome, plus a little for the proud fin
+      expect(bb.max.z).toBeGreaterThanOrEqual(2 + 2 * 3 - 1e-6)
+      expect(bb.max.z).toBeLessThanOrEqual(2 + 2 * 3 + 1.2 + 1e-6)
+    }
+    // mirror images: same size, x extents swapped
+    expect(boxes[1].min.x).toBeCloseTo(-boxes[0].max.x, 4)
+    expect(boxes[1].max.x).toBeCloseTo(-boxes[0].min.x, 4)
+    // outward-facing triangles on the mirrored half too: its volume is positive and equal
+    const volume = (g: (typeof halves)[0]['geometry']) => {
+      const pos = g.getAttribute('position')
+      const idx = g.getIndex()
+      const n = idx ? idx.count : pos.count
+      let v = 0
+      for (let i = 0; i < n; i += 3) {
+        const [a, b, d] = [0, 1, 2].map((k) => (idx ? idx.getX(i + k) : i + k))
+        v +=
+          (pos.getX(a) * (pos.getY(b) * pos.getZ(d) - pos.getZ(b) * pos.getY(d)) -
+            pos.getY(a) * (pos.getX(b) * pos.getZ(d) - pos.getZ(b) * pos.getX(d)) +
+            pos.getZ(a) * (pos.getX(b) * pos.getY(d) - pos.getY(b) * pos.getX(d))) /
+          6
+      }
+      return v
+    }
+    const v1 = volume(halves[0].geometry)
+    const v2 = volume(halves[1].geometry)
+    expect(v1).toBeGreaterThan(1000)
+    expect(v2).toBeCloseTo(v1, 0)
+  })
+
+  it('a winged creature: the ridge is cut for the top only and printed as part of the body', async () => {
+    const { buildPrintParts } = await import('./stlExport')
+    const { flyerBodyStack } = await import('../scene/reliefLayout')
+    const spec = templates.manta
+    const c = spec.characters[0]
+    const stack = flyerBodyStack(c)
+    expect(stack.levels.length).toBeGreaterThanOrEqual(1)
+    const cut = generateParts(spec).filter((p) => p.name.startsWith(`depth-${c.id}-`))
+    expect(cut).toHaveLength(stack.levels.reduce((n, l) => n + l.length, 0))
+    expect(cut.some((p) => /-(front|back)$/.test(p.name))).toBe(false)
+    const printed = buildPrintParts(spec)
+    expect(printed.some((p) => p.name.startsWith('depth-'))).toBe(false)
+    const body = printed.find((p) => p.name === `body-${c.id}`)!
+    body.geometry.computeBoundingBox()
+    const t = spec.frame.materialThickness
+    expect(body.geometry.boundingBox!.max.z).toBeCloseTo(t + stack.levels.length * 3, 3)
   })
 })

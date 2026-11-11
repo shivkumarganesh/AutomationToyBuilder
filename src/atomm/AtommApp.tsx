@@ -489,6 +489,9 @@ function FigureCard({ ch, spec, units }: { ch: CharacterSpec; spec: AutomatonSpe
           onChange={(v) => lib && s.updateCharacter(ch.id, { width: Math.round((lib.defaultWidth * v) / 100), height: Math.round((lib.defaultHeight * v) / 100) })}
         />
       )}
+      {ch.kind === 'silhouette' && (
+        <SliderRow label="Depth layers" value={ch.relief ?? 0} min={0} max={3} onChange={(v) => s.updateCharacter(ch.id, { relief: Math.round(v) })} />
+      )}
       <SwatchRow label="Colour" value={ch.color} onChange={(v) => s.updateCharacter(ch.id, { color: v })} />
       {spec.characters.length > 1 && (
         <div className="field-row">
@@ -548,6 +551,7 @@ function FlyerCard({ ch, spec, units }: { ch: CharacterSpec; spec: AutomatonSpec
           />
         </>
       )}
+      <SliderRow label="Body ridge layers" value={ch.relief ?? 0} min={0} max={3} onChange={(v) => s.updateCharacter(ch.id, { relief: Math.round(v) })} />
       <NumberRow label="Tip overhang" value={ch.height} min={6} max={40} units={units} onChange={(v) => s.updateCharacter(ch.id, { height: v })} />
       <SwatchRow label="Colour" value={ch.color} onChange={(v) => s.updateCharacter(ch.id, { color: v })} />
       {issues.map((m) => (

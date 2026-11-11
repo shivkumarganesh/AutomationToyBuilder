@@ -13,6 +13,7 @@ import { drawnFrom } from '../kinematics/drawnMotion'
 import { SceneryControls } from './SceneryControls'
 import { CustomThumb, FigureThumb, MotionIcon } from './Thumbs'
 import { ShapeStudio } from './ShapeStudio'
+import { MAX_RELIEF } from '../model/relief'
 import { useUiStore } from './uiStore'
 
 /** The plain-language motion a channel currently produces. */
@@ -294,6 +295,16 @@ function FigureCard({ ch, spec }: { ch: CharacterSpec; spec: AutomatonSpec }) {
           }
         />
       )}
+      {ch.kind === 'silhouette' && (
+        <NumberField
+          label="Depth layers (rounded body)"
+          value={ch.relief ?? 0}
+          min={0}
+          max={MAX_RELIEF}
+          unit=""
+          onChange={(v) => s.updateCharacter(ch.id, { relief: Math.round(v) })}
+        />
+      )}
       {sizePct !== null && (
         <NumberField
           label="Figure size"
@@ -405,6 +416,14 @@ function FlyerCard({ ch, spec }: { ch: CharacterSpec; spec: AutomatonSpec }) {
           />
         </>
       )}
+      <NumberField
+        label="Body ridge layers"
+        value={ch.relief ?? 0}
+        min={0}
+        max={MAX_RELIEF}
+        unit=""
+        onChange={(v) => s.updateCharacter(ch.id, { relief: Math.round(v) })}
+      />
       <NumberField
         label="Wing tip overhang"
         value={ch.height}

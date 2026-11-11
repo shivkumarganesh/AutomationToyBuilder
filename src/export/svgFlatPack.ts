@@ -18,16 +18,11 @@ import {
   LINK_PIN_DIAMETER,
   wandPlaneCrossing,
 } from '../kinematics/linkage'
-import {
-  DEFAULT_FIGURE_SHAPE,
-  figureEngraving,
-  figureLayers,
-  characterOutline,
-} from '../model/figures'
+import { characterOutline } from '../model/figures'
+import { figureStack, flyerBodyStack, plateUnder, runAnchor } from '../scene/reliefLayout'
 import { propFitsStage, propPlateOutline, propStageSlots } from '../scene/propLayout'
 import {
   FLYER_TAB_WIDTH,
-  flyerBodyEngraving,
   flyerBodyOutline,
   flyerBodyStitches,
   flyerGeometry,
@@ -802,7 +797,24 @@ function characterParts(
           // stitch holes for the wire-loop hinge option
           ...flyerBodyStitches(c, geo).map((h) => circle(h.x, h.y, (STITCH_HOLE - kerf) / 2, 12)),
         ],
-        flyerBodyEngraving(c),
+        flyerBodyStack(c).scores.filter((e) => e.level === 0).map((e) => e.item),
+      ),
+    )
+    // the ridge: depth plates glued on TOP of the body, each scored with
+    // what sits on it
+    const ridge = flyerBodyStack(c)
+    ridge.levels.forEach((level, k) =>
+      level.forEach((pl, n) =>
+        out.push(
+          place(
+            `depth-${c.id}-L${k + 1}${level.length > 1 ? String.fromCharCode(97 + n) : ''}`,
+            pl,
+            [],
+            ridge.scores
+              .filter((e) => e.level === k + 1 && plateUnder(ridge, k + 1, runAnchor(e.item)) === pl)
+              .map((e) => e.item),
+          ),
+        ),
       ),
     )
     out.push(place(`post-${c.id}`, flyerPostOutline(flyerPostHeight(spec, geo), t)))
@@ -829,35 +841,46 @@ function characterParts(
       kerf / 2,
     ).map((pt) => ({ x: pt.x, y: pt.y + c.height / 2 }))
     const b = bounds(grown)
-    const shapeId = c.shape ?? DEFAULT_FIGURE_SHAPE
-    const layers = figureLayers(shapeId, c.width, c.height)
-    // scored on the face: the detail lines, plus the footprint of every
-    // glued-on plate so it is obvious where each one goes
-    const marks = [
-      ...figureEngraving(shapeId, c.width, c.height),
-      ...layers.map((l) => [...l, l[0]]),
-    ]
+    // Everything glued onto the faces, level by level. Each plate is
+    // scored with whatever sits directly on it: the footprint of the
+    // next plates up (so it is obvious where each goes) and the
+    // engraved detail that ends up on its surface.
+    const stack = figureStack(c)
+    const marksOn = (level: number, on: (pt: Point2) => boolean): Path[] =>
+      stack.scores.filter((e) => e.level === level && on(runAnchor(e.item))).map((e) => e.item)
+    const base = marksOn(0, () => true)
     out.push({
       name: `figure-${c.id}`,
       outline: translate(grown, -b.minX, -b.minY),
       holes: [],
-      ...(marks.length > 0 ? { engrave: marks.map((l) => translate(l, -b.minX, -b.minY)) } : {}),
+      ...(base.length > 0 ? { engrave: base.map((l) => translate(l, -b.minX, -b.minY)) } : {}),
       width: b.maxX - b.minX,
       height: b.maxY - b.minY,
     })
-    // raised detail plates: one for each face of the figure
-    layers.forEach((layer, k) => {
-      const lb = bounds(layer)
-      for (const face of ['front', 'back']) {
+    const plate = (name: string, outline: Path, marks: Path[]) => {
+      const lb = bounds(outline)
+      for (const face of ['front', 'back'])
         out.push({
-          name: `detail-${c.id}-${k + 1}-${face}`,
-          outline: translate(layer, -lb.minX, -lb.minY),
+          name: `${name}-${face}`,
+          outline: translate(outline, -lb.minX, -lb.minY),
           holes: [],
+          ...(marks.length > 0 ? { engrave: marks.map((l) => translate(l, -lb.minX, -lb.minY)) } : {}),
           width: lb.maxX - lb.minX,
           height: lb.maxY - lb.minY,
         })
-      }
-    })
+    }
+    // depth plates: one for each face of the figure, per level
+    stack.levels.forEach((level, k) =>
+      level.forEach((pl, n) =>
+        plate(
+          `depth-${c.id}-L${k + 1}${level.length > 1 ? String.fromCharCode(97 + n) : ''}`,
+          pl,
+          marksOn(k + 1, (pt) => plateUnder(stack, k + 1, pt) === pl),
+        ),
+      ),
+    )
+    // hand-made detail plates (a fin, a wing)
+    stack.details.forEach((d, k) => plate(`detail-${c.id}-${k + 1}`, d.item, []))
     return out
   }
 

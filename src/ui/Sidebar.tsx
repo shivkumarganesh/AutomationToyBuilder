@@ -261,6 +261,16 @@ function CharacterControls({ character: ch }: { character: CharacterSpec }) {
         max={50}
         onChange={(v) => updateCharacter(ch.id, { width: v })}
       />
+      {(ch.kind === 'silhouette' || ch.kind === 'flyer') && (
+        <NumberField
+          label="Depth layers per face"
+          value={ch.relief ?? 0}
+          min={0}
+          max={3}
+          unit=""
+          onChange={(v) => updateCharacter(ch.id, { relief: Math.round(v) })}
+        />
+      )}
       {ch.kind === 'flyer' && (
         <>
           <NumberField

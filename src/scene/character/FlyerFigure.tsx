@@ -1,13 +1,12 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { BufferGeometry, ExtrudeGeometry, Float32BufferAttribute, Shape, type Group } from 'three'
+import { DoubleSide, ExtrudeGeometry, Shape, type Group } from 'three'
 import type { CharacterSpec } from '../../model/types'
 import type { Point2 } from '../../model/figures'
 import type { ChannelSignal } from '../../kinematics/channels'
 import {
   FLYER_POST_WIDTH,
   flyerAngles,
-  flyerBodyEngraving,
   flyerBodyOutline,
   flyerGeometry,
   flyerHingeLines,
@@ -18,6 +17,9 @@ import {
   type FlyerSide,
 } from '../flyerLayout'
 import { useDesignerStore } from '../../model/store'
+import { useUiStore } from '../../ui/uiStore'
+import { FLYER_RELIEF_FIRST, flyerBodyStack, stackDome } from '../reliefLayout'
+import { BURNT, ribbonGeometry, SCORCH_WIDTH, SCORE_WIDTH } from '../ribbons'
 
 /** Extrude a top-view outline (x across, y along the body) into a level plate. */
 function plateGeometry(pts: Point2[], thickness: number): ExtrudeGeometry {
@@ -33,17 +35,31 @@ function plateGeometry(pts: Point2[], thickness: number): ExtrudeGeometry {
   return geo
 }
 
-/** Engraved lines lying on a level plate's top face (same frame as plateGeometry). */
-function lineGeometry(lines: Point2[][], thickness: number): BufferGeometry | null {
-  const positions: number[] = []
-  const y = thickness + 0.06
-  for (const line of lines)
-    for (let i = 0; i + 1 < line.length; i++)
-      positions.push(line[i].x, y, line[i].y, line[i + 1].x, y, line[i + 1].y)
-  if (positions.length === 0) return null
-  const geo = new BufferGeometry()
-  geo.setAttribute('position', new Float32BufferAttribute(positions, 3))
-  return geo
+/** Scored lines lying on a level plate's top face (same frame as plateGeometry), real width. */
+function scored(lines: { line: Point2[]; lift: number }[]) {
+  const top = (p: Point2, lift: number): [number, number, number] => [p.x, lift, p.y]
+  return {
+    score: ribbonGeometry(lines, SCORE_WIDTH, top),
+    scorch: ribbonGeometry(lines, SCORCH_WIDTH, top),
+  }
+}
+type Scored = ReturnType<typeof scored>
+
+function Burn({ lines }: { lines: Scored }) {
+  return (
+    <>
+      {lines.scorch && (
+        <mesh geometry={lines.scorch}>
+          <meshBasicMaterial color={BURNT} transparent opacity={0.16} side={DoubleSide} depthWrite={false} />
+        </mesh>
+      )}
+      {lines.score && (
+        <mesh geometry={lines.score}>
+          <meshBasicMaterial color={BURNT} transparent opacity={0.88} side={DoubleSide} />
+        </mesh>
+      )}
+    </>
+  )
 }
 
 function darker(hex: string): string {
@@ -66,6 +82,7 @@ export function FlyerFigure({
 }) {
   const spec = useDesignerStore((s) => s.spec)
   const t = spec.frame.materialThickness
+  const printed = useUiStore((s) => s.method) === 'print'
   const geo = useMemo(() => flyerGeometry(spec, character, signals), [spec, character, signals])
   const refs = useRef<Record<string, Group | null>>({})
 
@@ -78,18 +95,32 @@ export function FlyerFigure({
           x: side.sign * (p.x - h),
           y: p.y,
         }))
-        const ribs = flyerWingEngraving(character, side, i).map((line) =>
-          line.map((p) => ({ x: side.sign * (p.x - h), y: p.y })),
-        )
-        return { plate: plateGeometry(pts, t), ribs: lineGeometry(ribs, t) }
+        // the print file carries no scored lines, so its preview shows none
+        const ribs = printed
+          ? []
+          : flyerWingEngraving(character, side, i).map((line) => ({
+              line: line.map((p) => ({ x: side.sign * (p.x - h), y: p.y })),
+              lift: t + 0.06,
+            }))
+        return { plate: plateGeometry(pts, t), ribs: scored(ribs) }
       })
+    // the ridge on the body: stepped plates (laser) or a dome (print)
+    const stack = flyerBodyStack(character)
+    const ridge: { geo: ExtrudeGeometry; y: number }[] = printed
+      ? stackDome(stack, character, t, FLYER_RELIEF_FIRST).flatMap((slice) =>
+          slice.outlines.map((o) => ({ geo: plateGeometry(o, slice.to - slice.from), y: t + slice.from })),
+        )
+      : stack.levels.flatMap((level, k) => level.map((o) => ({ geo: plateGeometry(o, t), y: (k + 1) * t })))
     return {
       body: plateGeometry(flyerBodyOutline(character), t),
-      bodyLines: lineGeometry(flyerBodyEngraving(character), t),
+      ridge,
+      bodyLines: scored(
+        printed ? [] : stack.engraving.map((e) => ({ line: e.item, lift: (e.level + 1) * t + 0.06 })),
+      ),
       left: wing(geo.left),
       right: wing(geo.right),
     }
-  }, [geo, character, t])
+  }, [geo, character, t, printed])
 
   useFrame(() => {
     if (!geo) return
@@ -110,11 +141,7 @@ export function FlyerFigure({
   const wingColor = character.color
   const bodyColor = darker(character.color)
 
-  const ink = <lineBasicMaterial color="#2b1a0e" transparent opacity={0.7} />
-  const wingGroup = (
-    side: FlyerSide,
-    plates: { plate: ExtrudeGeometry; ribs: BufferGeometry | null }[],
-  ) => {
+  const wingGroup = (side: FlyerSide, plates: { plate: ExtrudeGeometry; ribs: Scored }[]) => {
     const key = side.sign < 0 ? 'L' : 'R'
     return (
       <group
@@ -137,7 +164,7 @@ export function FlyerFigure({
         <mesh geometry={plates[0].plate}>
           <meshStandardMaterial color={wingColor} />
         </mesh>
-        {plates[0].ribs && <lineSegments geometry={plates[0].ribs}>{ink}</lineSegments>}
+        <Burn lines={plates[0].ribs} />
         {plates.length > 1 && (
           <group
             ref={(g) => {
@@ -148,7 +175,7 @@ export function FlyerFigure({
             <mesh geometry={plates[1].plate}>
               <meshStandardMaterial color={wingColor} />
             </mesh>
-            {plates[1].ribs && <lineSegments geometry={plates[1].ribs}>{ink}</lineSegments>}
+            <Burn lines={plates[1].ribs} />
           </group>
         )}
       </group>
@@ -165,11 +192,14 @@ export function FlyerFigure({
       <mesh geometry={meshes.body} position={[geo.xc, geo.axisY, 0]}>
         <meshStandardMaterial color={bodyColor} />
       </mesh>
-      {meshes.bodyLines && (
-        <lineSegments geometry={meshes.bodyLines} position={[geo.xc, geo.axisY, 0]}>
-          {ink}
-        </lineSegments>
-      )}
+      {meshes.ridge.map((r, i) => (
+        <mesh key={i} geometry={r.geo} position={[geo.xc, geo.axisY + r.y, 0]}>
+          <meshStandardMaterial color={bodyColor} />
+        </mesh>
+      ))}
+      <group position={[geo.xc, geo.axisY, 0]}>
+        <Burn lines={meshes.bodyLines} />
+      </group>
       {wingGroup(geo.left, meshes.left)}
       {wingGroup(geo.right, meshes.right)}
     </group>

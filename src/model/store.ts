@@ -682,6 +682,7 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
                   depth: 14,
                   color: FIGURE_INFO[shapeId]?.color ?? c.color,
                   label: shape.label,
+                  ...(FIGURE_INFO[shapeId]?.relief ? { relief: FIGURE_INFO[shapeId].relief } : {}),
                 }
               : c,
           ),

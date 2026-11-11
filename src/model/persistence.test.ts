@@ -122,3 +122,25 @@ describe('share URL encoding', () => {
     expect(() => decodeSpecFromUrl(encodeSpecForUrl(simplestAutomaton).slice(0, 10))).toThrow()
   })
 })
+
+describe('depth levels in saves', () => {
+  it('round-trips, rounds, and refuses depth on a figure that cannot carry it', async () => {
+    const { composeToy } = await import('./catalog')
+    const { templates } = await import('./templates')
+    const { parseSpec, serializeSpec } = await import('./persistence')
+    const whale = composeToy('whale', 'bob')
+    expect(whale.characters[0].relief).toBe(2)
+    expect(parseSpec(serializeSpec(whale))).toEqual(whale)
+    expect(parseSpec(serializeSpec(templates.dragon))).toEqual(templates.dragon)
+    const many = structuredClone(whale)
+    many.characters[0].relief = 9
+    expect(() => parseSpec(serializeSpec(many))).toThrow(/relief out of range/)
+    const block = structuredClone(templates.simplest)
+    block.characters[0].relief = 1
+    expect(() => parseSpec(serializeSpec(block))).toThrow(/needs a flat figure/)
+    // saves from before depth existed load as flat figures
+    const old = structuredClone(whale)
+    delete old.characters[0].relief
+    expect(parseSpec(serializeSpec(old)).characters[0].relief).toBeUndefined()
+  })
+})
