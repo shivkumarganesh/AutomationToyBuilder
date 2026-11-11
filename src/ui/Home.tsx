@@ -28,6 +28,7 @@ const FIGURE_ORDER = [
   'cat',
   'dancer',
   'rocket',
+  'prancer',
   'reindeer',
   'snowman',
   'xmastree',

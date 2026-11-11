@@ -38,6 +38,14 @@ export interface FigureShape {
    */
   layers?: Point2[][]
   /**
+   * Stacking order of `layers`, one entry each: 1 = glued on the face
+   * (the default), 2 = glued on top of a tier-1 plate, and so on — how a
+   * drawing is built up by anatomy (far legs, body, bow).
+   */
+  layerTiers?: number[]
+  /** Built up from stacked plates: prints as two rounded halves even with no depth levels. */
+  sculpted?: boolean
+  /**
    * Set on shapes that are one SEGMENT of a multi-part creature (each
    * segment rides its own channel). Hidden from the figure pickers.
    */
@@ -930,6 +938,11 @@ const fish_head: FigureShape = {
 }
 
 import { CHRISTMAS_FIGURES } from './christmas'
+import { artFigure } from './art/tracedArt'
+import { prancerArt } from './art/prancer'
+
+/** Figures traced from supplied line drawings. */
+const ART_FIGURES = [prancerArt].map(artFigure)
 
 export const FIGURE_SHAPES: Record<string, FigureShape> = {
   dancer,
@@ -947,6 +960,7 @@ export const FIGURE_SHAPES: Record<string, FigureShape> = {
   'fish-front': fish_front,
   'fish-head': fish_head,
   ...Object.fromEntries(CHRISTMAS_FIGURES.map((f) => [f.id, f])),
+  ...Object.fromEntries(ART_FIGURES.map((f) => [f.id, f])),
 }
 
 /** Shapes a user picks as a whole figure (segments excluded). */

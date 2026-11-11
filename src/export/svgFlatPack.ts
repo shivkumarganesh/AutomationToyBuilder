@@ -847,7 +847,7 @@ function characterParts(
     // engraved detail that ends up on its surface.
     const stack = figureStack(c)
     const marksOn = (level: number, on: (pt: Point2) => boolean): Path[] =>
-      stack.scores.filter((e) => e.level === level && on(runAnchor(e.item))).map((e) => e.item)
+      stack.scores.filter((e) => e.on === undefined && e.level === level && on(runAnchor(e.item))).map((e) => e.item)
     const base = marksOn(0, () => true)
     out.push({
       name: `figure-${c.id}`,
@@ -880,7 +880,13 @@ function characterParts(
       ),
     )
     // hand-made detail plates (a fin, a wing)
-    stack.details.forEach((d, k) => plate(`detail-${c.id}-${k + 1}`, d.item, []))
+    stack.details.forEach((d, k) =>
+      plate(
+        `detail-${c.id}-${k + 1}`,
+        d.item,
+        stack.scores.filter((e) => e.on === k).map((e) => e.item),
+      ),
+    )
     return out
   }
 

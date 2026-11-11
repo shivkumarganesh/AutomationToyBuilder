@@ -893,7 +893,7 @@ const withProps = (spec: AutomatonSpec, extra: NonNullable<AutomatonSpec['props'
   props: [...(spec.props ?? []), ...extra],
 })
 
-export const leapingReindeer = composeScene('Leaping Reindeer', [{ shape: 'reindeer', motion: 'bounce' }], 'winter')
+export const leapingReindeer = composeScene('Leaping Reindeer', [{ shape: 'prancer', motion: 'bounce' }], 'winter')
 
 export const sleighRide = withProps(
   composeScene(

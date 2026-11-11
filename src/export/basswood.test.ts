@@ -148,8 +148,12 @@ describe('detail and depth survive the trip to the sheet', () => {
     const whale = FIGURE_SHAPES.whale
     const parts = generateParts(spec)
     const figure = parts.find((p) => p.name === 'figure-figure-whale')!
-    // scored: every engraved line + one closed footprint per detail plate
-    expect(figure.engrave).toHaveLength(whale.engrave!.length + whale.layers!.length)
+    // scored: every engraved line + one footprint per detail plate; a line that
+    // runs onto a detail plate continues on that plate, never under it
+    const onPlates = parts
+      .filter((p) => p.name.startsWith('detail-figure-whale-') && p.name.endsWith('-front'))
+      .reduce((n, p) => n + (p.engrave ?? []).length, 0)
+    expect(figure.engrave!.length + onPlates).toBeGreaterThanOrEqual(whale.engrave!.length + whale.layers!.length)
     for (const line of figure.engrave!)
       for (const p of line) {
         expect(p.x).toBeGreaterThanOrEqual(-0.5)
@@ -163,7 +167,7 @@ describe('detail and depth survive the trip to the sheet', () => {
     expect(parts.some((p) => p.name.startsWith('depth-'))).toBe(false)
     const svg = flatPackSvg(spec)
     const score = /<g id="score"[^>]*>([\s\S]*?)<\/g>/.exec(svg)![1]
-    expect((score.match(/<path /g) ?? []).length).toBe(figure.engrave!.length)
+    expect((score.match(/<path /g) ?? []).length).toBe(figure.engrave!.length + onPlates * 2)
     // scored lines are open paths: never a closed cut
     expect(score).not.toContain(' Z')
     // printed: one piece, the detail plate as raised relief
@@ -199,7 +203,8 @@ describe('detail and depth survive the trip to the sheet', () => {
     const l1 = parts.find((p) => p.name === `depth-${c.id}-L1-front`)!
     expect(closedLoops(l1)).toBeGreaterThanOrEqual(stack.levels[1].length)
     // every scored run of the stack ends up on exactly one front plate or the base
-    const scoredSomewhere = [figure, ...depth.filter((p) => p.name.endsWith('-front'))].reduce(
+    const fronts = parts.filter((p) => /^(depth|detail)-/.test(p.name) && p.name.endsWith('-front'))
+    const scoredSomewhere = [figure, ...fronts].reduce(
       (n, p) => n + (p.engrave ?? []).length,
       0,
     )

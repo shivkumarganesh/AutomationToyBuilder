@@ -134,6 +134,30 @@ spindles), small pins, wire for the wire-linkage bird, and hinge tape.
   Shapes are drawn in millimetres at their default size so every web can be
   read against the basswood rules, and all pass the audit.
 
+## Figures from your own line drawings
+
+`scripts/trace-art.py` turns black-on-white line art into a layered library
+figure (the prancing reindeer is the first):
+
+1. **Silhouette** — everything inside the outer line becomes the base plate,
+   with a mounting stem added under the middle.
+2. **Plates by anatomy** — the lines split the inside into regions (run once
+   with `--debug` and read the numbers off `regions.png`). A small config
+   (`scripts/art/*.json`) lists which regions make each stacked plate: for the
+   reindeer, body + near legs on the base (far legs and antlers stay behind),
+   then bow, bell and holly on the body.
+3. **Engraving** — every remaining inside line is thinned to a centreline and
+   scored on whichever plate is uppermost there.
+
+Plates can now sit on plates (`layerTiers`); each one is scored with the
+outline of what is glued on it, except where that coincides with its own cut
+edge. Such figures print as two mirrored halves with the plates as thick
+rounded tiers. Parts too thin for 3 mm basswood can be thickened in the config
+(`thicken`) — the reindeer's antlers are grown about 0.35 mm per side.
+
+    pip install numpy pillow scipy scikit-image opencv-python-headless
+    python scripts/trace-art.py drawing.png scripts/art/reindeer.json src/model/art/prancer.ts --debug out/
+
 ## Depth and engraving — flat sheet, rounded toy
 
 Figures and winged creatures carry a **depth** setting (0–3 levels per face).

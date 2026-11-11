@@ -11,8 +11,15 @@ import { channelSignals } from '../kinematics/channels'
 import { rockerPivotY } from '../scene/rockerLayout'
 import { couplerPlateOutline, LINK_PIN_DIAMETER } from '../kinematics/linkage'
 import { characterOutline } from '../model/figures'
-import { centreOf } from '../model/relief'
-import { domeHeightAt, figureStack, FLYER_RELIEF_FIRST, flyerBodyStack, stackDome } from '../scene/reliefLayout'
+import { centreOf, insetOutline } from '../model/relief'
+import {
+  domeHeightAt,
+  figureStack,
+  FLYER_RELIEF_FIRST,
+  flyerBodyStack,
+  PRINT_TIER,
+  stackDome,
+} from '../scene/reliefLayout'
 import { propPlateOutline } from '../scene/propLayout'
 import { generateParts, type Part } from './svgFlatPack'
 import {
@@ -54,6 +61,25 @@ import {
 const DEPTH_LAYER = 3
 /** Height of printed relief detail above a figure's face. */
 const RELIEF_HEIGHT = 1.2
+
+/** The mirror image of a solid, with its triangles turned back outward. */
+function mirrorX(solid: BufferGeometry): BufferGeometry {
+  const mirrored = solid.clone().scale(-1, 1, 1)
+  const index = mirrored.getIndex()
+  if (index) {
+    const arr = index.array
+    for (let i = 0; i < arr.length; i += 3) [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]
+  } else {
+    const pos = mirrored.getAttribute('position')
+    for (let i = 0; i < pos.count; i += 3) {
+      const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)]
+      pos.setXYZ(i, pos.getX(i + 1), pos.getY(i + 1), pos.getZ(i + 1))
+      pos.setXYZ(i + 1, x, y, z)
+    }
+    mirrored.computeVertexNormals()
+  }
+  return mirrored
+}
 const FLAT_RATIO = 0.55
 const PAD_THICKNESS = 4
 
@@ -488,7 +514,25 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
       }
       const stack = figureStack(c)
       const dome = stackDome(stack, c, DEPTH_LAYER)
-      if (dome.length === 0) {
+      if (stack.sculpted) {
+        // built up by anatomy: two mirrored halves, every plate a thick
+        // tier with a softened top edge, each resting on the one below
+        const tiers = stack.details.flatMap((d) => {
+          const z = 2 + domeHeightAt(dome, centreOf(d.item)) + d.rise * PRINT_TIER
+          const crown = insetOutline(d.item, 0.7)
+          return [
+            solid(d.item, PRINT_TIER - 0.6, z),
+            ...(crown.length > 0 ? crown : [d.item]).map((o) => solid(o, 0.6, z + PRINT_TIER - 0.6)),
+          ]
+        })
+        const whole = merge([
+          new ExtrudeGeometry(shape, { depth: 2, bevelEnabled: false }),
+          ...dome.flatMap((slice) => slice.outlines.map((o) => solid(o, slice.to - slice.from, 2 + slice.from))),
+          ...tiers,
+        ])
+        parts.push({ name: `figure-${c.id}-half1`, geometry: whole })
+        parts.push({ name: `figure-${c.id}-half2`, geometry: mirrorX(whole) })
+      } else if (dome.length === 0) {
         // no depth: one flat piece, detail plates as raised relief on top
         const relief = stack.details.map((d) => solid(d.item, RELIEF_HEIGHT, 4))
         parts.push({
@@ -510,22 +554,7 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
         ]
         const whole = merge(half)
         parts.push({ name: `figure-${c.id}-half1`, geometry: whole })
-        // the other half is the mirror image, so the pair match face to face
-        const mirrored = whole.clone().scale(-1, 1, 1)
-        const index = mirrored.getIndex()
-        if (index) {
-          const arr = index.array
-          for (let i = 0; i < arr.length; i += 3) [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]
-        } else {
-          const pos = mirrored.getAttribute('position')
-          for (let i = 0; i < pos.count; i += 3) {
-            const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)]
-            pos.setXYZ(i, pos.getX(i + 1), pos.getY(i + 1), pos.getZ(i + 1))
-            pos.setXYZ(i + 1, x, y, z)
-          }
-          mirrored.computeVertexNormals()
-        }
-        parts.push({ name: `figure-${c.id}-half2`, geometry: mirrored })
+        parts.push({ name: `figure-${c.id}-half2`, geometry: mirrorX(whole) })
       }
       const signal = signals.find((sg) => sg.channel.id === c.channelId)
       if (signal?.kind === 'tilt') {

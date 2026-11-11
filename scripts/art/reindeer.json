@@ -1,0 +1,16 @@
+{
+  "id": "prancer",
+  "export": "prancerArt",
+  "label": "Reindeer",
+  "widthMm": 72,
+  "stroke": 9,
+  "maxOutline": 380,
+  "minLineMm": 1.1,
+  "lineEps": 1.0,
+  "stem": { "widthMm": 5, "topPx": 735, "belowMm": 0.5 },
+  "thicken": [{ "regions": [1], "px": 6 }],
+  "tiers": [
+    [12, 6, 3, 4, 7, 8, 9, 40, 43, 41, 42, 11, 13, 14, 15, 16, 17, 18, 19, 20, 35, 25, 26, 27],
+    [11, 13, 14, 15, 16, 17, 18, 19, 20, 35, 25, 26, 27]
+  ]
+}
