@@ -56,7 +56,7 @@ function starRight(cx: number, cy: number, outer: number, inner: number): Point2
 const REINDEER: Box = { width: 46, height: 50 }
 const reindeer: FigureShape = {
   id: 'reindeer',
-  label: 'Reindeer',
+  label: 'Reindeer (simple)',
   defaultWidth: REINDEER.width,
   defaultHeight: REINDEER.height,
   outline: unit(

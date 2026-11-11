@@ -8,7 +8,7 @@ import { channelValue } from '../../kinematics/channels'
 import { samplePath } from '../../kinematics/linkage'
 import { characterOutline } from '../../model/figures'
 import { centreOf } from '../../model/relief'
-import { domeHeightAt, figureStack, stackDome } from '../reliefLayout'
+import { domeHeightAt, figureStack, PRINT_TIER, stackDome } from '../reliefLayout'
 import { BURNT, ribbonGeometry, SCORCH_WIDTH, SCORE_WIDTH } from '../ribbons'
 import { useUiStore } from '../../ui/uiStore'
 import { HINGE_HEIGHT } from '../figureLayout'
@@ -124,9 +124,15 @@ export function SilhouetteFigure({
       )
       heightOf = (_pt, level) => level * LAYER_THICKNESS
     }
-    const detailDepth = method === 'print' ? PRINT_RELIEF : LAYER_THICKNESS
+    // printed: a sculpted figure's plates are thick rounded tiers, an ordinary detail a low relief
+    const detailDepth = method === 'print' ? (stack.sculpted ? PRINT_TIER : PRINT_RELIEF) : LAYER_THICKNESS
     for (const d of stack.details)
-      plates.push({ geo: extrude(d.item, detailDepth), z: heightOf(centreOf(d.item), d.level), depth: detailDepth, detail: true })
+      plates.push({
+        geo: extrude(d.item, detailDepth),
+        z: method === 'print' ? heightOf(centreOf(d.item), d.level) + d.rise * detailDepth : d.level * LAYER_THICKNESS,
+        depth: detailDepth,
+        detail: true,
+      })
     // scored lines exist only on the laser route (the print file carries none)
     const lines =
       method === 'print'

@@ -168,6 +168,12 @@ export const FIGURE_INFO: Record<string, FigureInfo> = {
     color: '#a9713f',
     relief: 1,
   },
+  prancer: {
+    blurb: 'Leaps in a bow and bell — built up in layers from a line drawing.',
+    motions: ['bounce', 'bob', 'drop'],
+    scene: 'winter',
+    color: '#b07a45',
+  },
   snowman: {
     blurb: 'Bobs about in his scarf and top hat.',
     motions: ['bob', 'spin', 'bounce'],
