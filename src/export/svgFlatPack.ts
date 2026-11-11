@@ -29,7 +29,10 @@ import {
   FLYER_TAB_WIDTH,
   flyerBodyEngraving,
   flyerBodyOutline,
+  flyerBodyStitches,
   flyerGeometry,
+  flyerWingStitches,
+  STITCH_HOLE,
   flyerPostHeight,
   flyerPostOutline,
   flyerWingEngraving,
@@ -794,7 +797,11 @@ function characterParts(
       place(
         `body-${c.id}`,
         flyerBodyOutline(c),
-        [rect(0, 0, t - kerf, FLYER_TAB_WIDTH - kerf)],
+        [
+          rect(0, 0, t - kerf, FLYER_TAB_WIDTH - kerf),
+          // stitch holes for the wire-loop hinge option
+          ...flyerBodyStitches(c, geo).map((h) => circle(h.x, h.y, (STITCH_HOLE - kerf) / 2, 12)),
+        ],
         flyerBodyEngraving(c),
       ),
     )
@@ -805,7 +812,10 @@ function characterParts(
         const flip = (pt: Point2) => ({ x: side.sign * pt.x, y: pt.y })
         const plate = flyerWingPlate(c, side, i).map(flip)
         const ribs = flyerWingEngraving(c, side, i).map((l) => l.map(flip))
-        out.push(place(`wing-${c.id}-${tag}${i + 1}`, plate, [], ribs))
+        const stitches = flyerWingStitches(c, side, i).map((h) =>
+          circle(side.sign * h.x, h.y, (STITCH_HOLE - kerf) / 2, 12),
+        )
+        out.push(place(`wing-${c.id}-${tag}${i + 1}`, plate, stitches, ribs))
       })
     }
     return out

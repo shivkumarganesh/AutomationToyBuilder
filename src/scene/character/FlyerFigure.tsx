@@ -10,7 +10,9 @@ import {
   flyerBodyEngraving,
   flyerBodyOutline,
   flyerGeometry,
+  flyerHingeLines,
   flyerWingEngraving,
+  HINGE_GAP,
   flyerPostHeight,
   flyerWingPlate,
   type FlyerSide,
@@ -121,6 +123,17 @@ export function FlyerFigure({
         }}
         position={[side.hingeX, geo.axisY, 0]}
       >
+        {/* the hinges: strips under each gap, where the tape or loops go */}
+        {flyerHingeLines(character, side).map((line, i) => (
+          <mesh
+            key={i}
+            position={[side.sign * line.at, -0.3, (line.from + line.to) / 2]}
+            userData={{ noFinish: true }}
+          >
+            <boxGeometry args={[HINGE_GAP + 5, 0.6, line.to - line.from]} />
+            <meshStandardMaterial color="#efe6d2" roughness={0.9} />
+          </mesh>
+        ))}
         <mesh geometry={plates[0].plate}>
           <meshStandardMaterial color={wingColor} />
         </mesh>

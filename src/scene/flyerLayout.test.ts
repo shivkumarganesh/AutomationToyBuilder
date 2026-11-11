@@ -13,7 +13,11 @@ import {
   FLYER_TAB_WIDTH,
   flyerAngles,
   flyerBodyOutline,
+  flyerBodyStitches,
   flyerGeometry,
+  flyerHingeLines,
+  flyerWingStitches,
+  STITCH_INSET,
   flyerIssues,
   flyerPostHeight,
   flyerSweep,
@@ -149,7 +153,8 @@ for (const [name, spec] of Object.entries(flyers)) {
       expect(names).toContain(`post-${c.id}`)
       expect(names.filter((n) => n.startsWith(`wing-${c.id}-`))).toHaveLength(plates * 2)
       const body = parts.find((p) => p.name === `body-${c.id}`)!
-      expect(body.holes).toHaveLength(1)
+      // the post slot, plus the stitch holes for the wire-loop hinge
+      expect(body.holes).toHaveLength(1 + flyerBodyStitches(c, geo).length)
       const kerf = spec.export.kerf
       const span = (pts: { x: number; y: number }[], k: 'x' | 'y') =>
         Math.max(...pts.map((p) => p[k])) - Math.min(...pts.map((p) => p[k]))
@@ -280,5 +285,61 @@ describe('flyer engraving', () => {
       const wings = generateParts(spec).filter((p) => p.name.startsWith(`wing-${c.id}-`))
       expect(wings.some((w) => (w.engrave ?? []).length > 0)).toBe(true)
     }
+  })
+})
+
+describe('how the wings connect: hinges people can actually make', () => {
+  for (const [name, spec] of Object.entries(flyers)) {
+    it(`${name}: every stitch hole faces a partner straight across its hinge gap`, () => {
+      const c = spec.characters[0]
+      const geo = flyerGeometry(spec, c, channelSignals(spec))!
+      const bodyHoles = flyerBodyStitches(c, geo)
+      for (const side of [geo.left, geo.right]) {
+        const lines = flyerHingeLines(c, side)
+        expect(lines).toHaveLength(side.hinges.length)
+        lines.forEach((line, i) => {
+          expect(line.to - line.from, 'a hinge long enough to tape').toBeGreaterThan(8)
+          expect(line.stitches.length).toBeGreaterThanOrEqual(1)
+          // holes on the outer plate of this hinge
+          const outer = flyerWingStitches(c, side, i).filter(
+            (h) => Math.abs(h.x - (line.at + HINGE_GAP / 2 + STITCH_INSET)) < 1e-6,
+          )
+          expect(outer).toHaveLength(line.stitches.length)
+          // their partners: on the body for the root hinge, on the inner plate otherwise
+          const partners =
+            i === 0
+              ? bodyHoles
+                  .filter((h) => Math.sign(h.x) === side.sign)
+                  // body frame is centred on the body; shift to the wing frame
+                  .map((h) => ({ x: side.sign * h.x - (c.width / 2 + HINGE_GAP / 2), y: h.y }))
+              : flyerWingStitches(c, side, i - 1).filter(
+                  (h) => Math.abs(h.x - (line.at - HINGE_GAP / 2 - STITCH_INSET)) < 1e-6,
+                )
+          expect(partners).toHaveLength(outer.length)
+          outer.forEach((h, k) => {
+            const mate = [...partners].sort((a, b) => Math.abs(a.y - h.y) - Math.abs(b.y - h.y))[0]
+            expect(mate.y, `${name} hinge ${i} stitch ${k}`).toBeCloseTo(h.y, 6)
+            // one gap plus an inset each side apart
+            expect(h.x - mate.x).toBeCloseTo(HINGE_GAP + 2 * STITCH_INSET, 6)
+          })
+        })
+      }
+    })
+  }
+
+  it('the guide explains both hinge methods and that wings rest on the rods', async () => {
+    const { buildGuide } = await import('../export/buildGuide')
+    for (const method of ['laser', 'print'] as const) {
+      const g = buildGuide(dragon, method)
+      const text = g.steps.flatMap((s) => s.body).join(' ')
+      expect(text).toMatch(/method A — tape/)
+      expect(text).toMatch(/method B — wire or thread loops/)
+      expect(text).toMatch(/outer plate to the inner plate/)
+      expect(text).toMatch(/Do not glue or tie the wings to the rods/)
+      expect(g.hardware.some((h) => /wing hinges/.test(h.item))).toBe(true)
+    }
+    // a one-plate wing is not told about an outer plate
+    const bird = buildGuide(flyingBird, 'laser').steps.flatMap((s) => s.body).join(' ')
+    expect(bird).not.toMatch(/outer plate to the inner plate/)
   })
 })

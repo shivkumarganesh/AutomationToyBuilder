@@ -223,6 +223,74 @@ export function flyerWingPlate(c: CharacterSpec, side: FlyerSide, index: number)
   return plate
 }
 
+/** Diameter of the stitch holes a wire-loop hinge passes through. */
+export const STITCH_HOLE = 1.2
+/** How far a stitch hole sits in from the hinged edge (leaves 2 mm+ of wood). */
+export const STITCH_INSET = 3
+
+export interface HingeLine {
+  /** Distance of the hinge axis from the root hinge (0 = body-to-wing). */
+  at: number
+  /** Extent of the hinged edges along the body, in the plate frame. */
+  from: number
+  to: number
+  /** Where along the body the stitch holes sit (one or two per hinge). */
+  stitches: number[]
+}
+
+/**
+ * Every hinge of one wing: where it is, how long it is, and where its
+ * stitch holes go. Both ways of making a hinge read this — tape is
+ * stuck along [from, to]; a wire or thread loop passes through the pair
+ * of holes facing each other across the gap at each stitch position.
+ */
+export function flyerHingeLines(c: CharacterSpec, side: FlyerSide): HingeLine[] {
+  return side.hinges.map((at, i) => {
+    const plate = flyerWingPlate(c, side, i)
+    const minX = Math.min(...plate.map((p) => p.x))
+    const edge = plate.filter((p) => p.x - minX < 1e-6)
+    let from = Math.min(...edge.map((p) => p.y))
+    let to = Math.max(...edge.map((p) => p.y))
+    if (i > 0) {
+      // the inner plate's outer edge may be shorter: hinge only where both exist
+      const inner = flyerWingPlate(c, side, i - 1)
+      const maxX = Math.max(...inner.map((p) => p.x))
+      const innerEdge = inner.filter((p) => maxX - p.x < 1e-6)
+      from = Math.max(from, Math.min(...innerEdge.map((p) => p.y)))
+      to = Math.min(to, Math.max(...innerEdge.map((p) => p.y)))
+    }
+    const len = to - from
+    const stitches = len >= 14 ? [from + len * 0.25, from + len * 0.75] : [from + len / 2]
+    return { at, from, to, stitches }
+  })
+}
+
+/**
+ * Stitch-hole centres on one wing plate, in flyerWingPlate's frame: a
+ * row just inside its inner hinged edge and, if another plate hangs
+ * from it, a row just inside its outer edge.
+ */
+export function flyerWingStitches(c: CharacterSpec, side: FlyerSide, index: number): Point2[] {
+  const lines = flyerHingeLines(c, side)
+  const out: Point2[] = []
+  for (const y of lines[index].stitches)
+    out.push({ x: lines[index].at + HINGE_GAP / 2 + STITCH_INSET, y })
+  if (index + 1 < lines.length)
+    for (const y of lines[index + 1].stitches)
+      out.push({ x: lines[index + 1].at - HINGE_GAP / 2 - STITCH_INSET, y })
+  return out
+}
+
+/** Stitch-hole centres on the body, in flyerBodyOutline's frame (both sides). */
+export function flyerBodyStitches(c: CharacterSpec, geo: FlyerGeometry): Point2[] {
+  const out: Point2[] = []
+  for (const side of [geo.left, geo.right]) {
+    const root = flyerHingeLines(c, side)[0]
+    for (const y of root.stitches) out.push({ x: side.sign * (c.width / 2 - STITCH_INSET), y })
+  }
+  return out
+}
+
 /** Keep the parts of a polyline with from ≤ x ≤ to, as separate runs. */
 function clipLineX(line: Point2[], from: number, to: number): Point2[][] {
   const runs: Point2[][] = []
