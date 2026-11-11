@@ -149,5 +149,11 @@ introduces a new mechanism, a profile function in `src/kinematics/`):
   wing ribs — scored, never cut) and raised DETAIL PLATES glued on each face
   (a fin, a wing); printed figures get the plates as relief
 
+- ~~motion-first cam designer~~ — shipped: the `custom` cam kind. Drag twelve
+  heights on a curve of height-vs-crank-angle and the cam is the base circle
+  plus that curve, laid out against the rotation so it plays back in the order
+  drawn (`src/kinematics/drawnMotion.ts`). The editor overlays what the real
+  flat follower does, and warns when a climb exceeds a 38° pressure angle
+
 Next: segmented swimmers (phase-lagged body sections), a motion-first cam
 designer (draw the displacement curve, get the cam), per-part STL files.

@@ -40,7 +40,7 @@ export interface FrameSpec {
  */
 export const STAGE_LIP = 4
 
-export type CamKind = 'eccentric' | 'petal' | 'snail'
+export type CamKind = 'eccentric' | 'petal' | 'snail' | 'custom'
 
 interface CamBase {
   id: string
@@ -86,7 +86,20 @@ export interface SnailCamSpec extends CamBase {
   lift: number
 }
 
-export type CamSpec = EccentricCamSpec | PetalCamSpec | SnailCamSpec
+/**
+ * A cam shaped from a DRAWN motion: `lifts[i]` is how far the follower
+ * should stand above its lowest point when the crank is at
+ * i × 360° / lifts.length. The profile is the base circle plus a smooth
+ * periodic curve through those heights, laid out against the direction
+ * of rotation so the motion plays back in the order it was drawn.
+ */
+export interface CustomCamSpec extends CamBase {
+  kind: 'custom'
+  baseRadius: number
+  lifts: number[]
+}
+
+export type CamSpec = EccentricCamSpec | PetalCamSpec | SnailCamSpec | CustomCamSpec
 
 /**
  * A vertical rod riding its cam through a flat follower pad, guided by a
@@ -414,6 +427,8 @@ export function camMaxRadius(cam: CamSpec): number {
       return cam.baseRadius + cam.lift
     case 'snail':
       return cam.baseRadius + cam.lift
+    case 'custom':
+      return cam.baseRadius + Math.max(...cam.lifts)
   }
 }
 

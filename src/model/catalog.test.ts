@@ -4,7 +4,7 @@ import { PROP_SHAPES } from './props'
 import { templates } from './templates'
 import { composeToy, FIGURE_INFO, MOTIONS, TEMPLATE_INFO, type MotionId } from './catalog'
 import { parseSpec, serializeSpec } from './persistence'
-import { outputChannels } from './types'
+import { camMaxRadius, outputChannels } from './types'
 import { channelSignals } from '../kinematics/channels'
 import { grashofOk } from '../kinematics/linkage'
 import { flatPackSvg, generateParts, propConflicts } from '../export/svgFlatPack'
@@ -55,7 +55,7 @@ describe('figure-first recipes: every figure × every motion', () => {
         // the mechanism stays inside the box
         const { frame, mechanism: m } = spec
         for (const cam of m.cams) {
-          const reach = cam.kind === 'eccentric' ? cam.radius + cam.eccentricity : cam.baseRadius + cam.lift
+          const reach = camMaxRadius(cam)
           expect(m.shaftHeight - reach, 'cam clears the floor').toBeGreaterThan(frame.materialThickness)
           expect(m.shaftHeight + reach, 'cam clears the stage').toBeLessThan(frame.height)
         }
