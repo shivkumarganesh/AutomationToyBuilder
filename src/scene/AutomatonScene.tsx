@@ -21,26 +21,36 @@ import { Prop } from './scenery/Prop'
 import { FlyerFigure } from './character/FlyerFigure'
 import { Workbench, WoodFinish } from './Workshop'
 import { SoundDriver } from './SoundDriver'
+import { GeometryJanitor, Rig, StudioLight, ZoomBridge } from './Studio'
 
 /**
  * The 3D view, composed as the two zones joined by the frame:
  * mechanism group below the stage, character group above it.
  */
-export function AutomatonScene() {
+export function AutomatonScene({ studio = false }: { studio?: boolean }) {
   const spec = useDesignerStore((s) => s.spec)
   const channels = useChannels()
+  // bounding radius of the toy, for the opening shot and the zoom limits
+  const [radius] = useState(() => {
+    const f = spec.frame
+    return Math.hypot(f.width / 2 + 45, (f.height + 90) / 2, f.depth / 2 + 20)
+  })
+  const [target] = useState<[number, number, number]>(() => [0, (spec.frame.height + 60) / 2, 0])
   // flyers are top-view creatures: open looking down on them (the camera
   // is only placed on mount, so orbiting is never overridden)
-  const [startCamera] = useState<[number, number, number]>(() =>
-    spec.characters.some((c) => c.kind === 'flyer') ? [150, 330, 215] : [215, 185, 250],
-  )
+  const [startCamera] = useState<[number, number, number]>(() => {
+    if (!studio)
+      return spec.characters.some((c) => c.kind === 'flyer') ? [150, 330, 215] : [215, 185, 250]
+    // studio: about 3.2 × R out, tilted slightly down, whole toy on screen
+    const flyer = spec.characters.some((c) => c.kind === 'flyer')
+    const dir = flyer ? [0.38, 0.72, 0.58] : [0.56, 0.42, 0.72]
+    const len = Math.hypot(dir[0], dir[1], dir[2])
+    const d = 3.2 * radius
+    return [(dir[0] / len) * d, target[1] + (dir[1] / len) * d, (dir[2] / len) * d]
+  })
 
-  return (
-    <Canvas shadows camera={{ position: startCamera, fov: 40 }}>
-      <color attach="background" args={['#231a13']} />
-      <Workbench />
-      <WoodFinish />
-
+  const content = (
+    <>
       <CrankDriver />
       <SoundDriver signals={channels} />
       <group name="frame">
@@ -123,7 +133,41 @@ export function AutomatonScene() {
         ))}
       </group>
 
-      <OrbitControls target={[0, 72, 0]} makeDefault maxPolarAngle={Math.PI / 2 - 0.03} minDistance={120} maxDistance={900} />
+    </>
+  )
+
+  return (
+    <Canvas
+      shadows
+      dpr={[1, 2]}
+      camera={{ position: startCamera, fov: 40, near: 5, far: 6000 }}
+      style={{ userSelect: 'none' }}
+    >
+      <color attach="background" args={[studio ? '#e7e8ea' : '#231a13']} />
+      {studio ? <StudioLight /> : <Workbench />}
+      <WoodFinish shadeSides={studio} />
+      {studio && <GeometryJanitor />}
+      {studio && <ZoomBridge home={3.2 * radius} />}
+      {studio ? <Rig>{content}</Rig> : content}
+      {studio ? (
+        <OrbitControls
+          target={target}
+          makeDefault
+          enableDamping
+          dampingFactor={0.08}
+          minDistance={1.2 * radius}
+          maxDistance={8 * radius}
+          maxPolarAngle={Math.PI * 0.5 - 0.02}
+        />
+      ) : (
+        <OrbitControls
+          target={[0, 72, 0]}
+          makeDefault
+          maxPolarAngle={Math.PI / 2 - 0.03}
+          minDistance={120}
+          maxDistance={900}
+        />
+      )}
     </Canvas>
   )
 }
