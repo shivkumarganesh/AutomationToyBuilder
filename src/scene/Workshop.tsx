@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { CanvasTexture, Color, Mesh, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace } from 'three'
 import { useDesignerStore } from '../model/store'
@@ -68,28 +68,44 @@ function finished(base: Color, zone: string, finish: Finish): Color {
  * no part component needs to know about finishes — and it never touches
  * geometry, so what is rendered is still exactly what is exported.
  */
-export function WoodFinish() {
+export function WoodFinish({ shadeSides = false }: { shadeSides?: boolean }) {
   const scene = useThree((s) => s.scene)
   const invalidate = useThree((s) => s.invalidate)
   const finish = useUiStore((s) => s.finish)
   const spec = useDesignerStore((s) => s.spec)
   const seeThrough = useDesignerStore((s) => s.seeThrough)
   const xray = useDesignerStore((s) => s.xrayFigures)
+  // built once and shared by every part; released only on unmount
   const grain = useMemo(() => {
-    // extruded parts carry UVs in millimetres; boxes and cylinders in 0…1
+    // extruded parts carry UVs in millimetres: one tile of grain spans
+    // 70 mm whatever the part's size. Boxes and cylinders carry 0…1.
     const mm = grainTexture(7, 1)
     mm.repeat.set(1 / 70, 1 / 70)
     const unit = grainTexture(19, 0.8)
     unit.repeat.set(1, 1)
     return { mm, unit }
   }, [])
+  // darker side materials this component created (one per extruded part)
+  const sides = useRef(new Map<Mesh, MeshStandardMaterial>())
+
+  useEffect(
+    () => () => {
+      grain.mm.dispose()
+      grain.unit.dispose()
+      for (const m of sides.current.values()) m.dispose()
+      sides.current.clear()
+    },
+    [grain],
+  )
 
   useEffect(() => {
     const dress = () => {
+      const live = new Set<Mesh>()
       scene.traverse((obj) => {
-        if (!(obj instanceof Mesh)) return
-        const mat = obj.material
-        if (!(mat instanceof MeshStandardMaterial) || obj.userData.noFinish) return
+        if (!(obj instanceof Mesh) || obj.userData.noFinish) return
+        // the face material is the one React owns; a side material, if any, is ours
+        const mat = Array.isArray(obj.material) ? obj.material[0] : obj.material
+        if (!(mat instanceof MeshStandardMaterial)) return
         let zone = 'mechanism'
         for (let p = obj.parent; p; p = p.parent) {
           if (p.name === 'characters' || p.name === 'scenery' || p.name === 'frame') {
@@ -105,21 +121,47 @@ export function WoodFinish() {
         const next = finished(new Color(mat.userData.base as number), zone, finish)
         mat.color.copy(next)
         mat.userData.applied = mat.color.getHex()
-        const map = obj.geometry.type === 'ExtrudeGeometry' ? grain.mm : grain.unit
+        const extruded = obj.geometry.type === 'ExtrudeGeometry'
+        const map = extruded ? grain.mm : grain.unit
         if (mat.map !== map) {
           mat.map = map
+          mat.bumpMap = map
+          mat.bumpScale = 0.6
           mat.needsUpdate = true
         }
         mat.roughness = 0.78
         mat.metalness = 0
+        // faces and sides as separate material groups, the sides a shade
+        // darker, so a plate reads as a solid slab
+        if (shadeSides && extruded) {
+          live.add(obj)
+          let side = sides.current.get(obj)
+          if (!side || side.transparent !== mat.transparent) {
+            side?.dispose()
+            side = mat.clone()
+            sides.current.set(obj, side)
+          }
+          side.color.copy(mat.color).multiplyScalar(0.8)
+          side.opacity = mat.opacity
+          side.map = map
+          side.bumpMap = map
+          obj.material = [mat, side]
+        }
       })
+      // side materials of parts that have gone
+      for (const [mesh, side] of sides.current) {
+        if (!live.has(mesh)) {
+          side.dispose()
+          sides.current.delete(mesh)
+        }
+      }
       invalidate()
     }
     dress()
     // parts mounted by this same render settle a frame later
     const id = requestAnimationFrame(dress)
     return () => cancelAnimationFrame(id)
-  }, [scene, invalidate, finish, spec, seeThrough, xray, grain])
+  }, [scene, invalidate, finish, spec, seeThrough, xray, grain, shadeSides])
 
   return null
 }

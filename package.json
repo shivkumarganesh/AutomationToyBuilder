@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:atomm": "tsc -b && vite build --base=./ --outDir dist-atomm && cd dist-atomm && zip -qr ../automaton-toy-designer-atomm.zip . && cd .. && echo 'Upload automaton-toy-designer-atomm.zip in the atomm Developer Console'",
+    "dev:atomm": "vite --open /atomm.html",
+    "build:atomm": "tsc -b && vite build --config vite.atomm.config.ts && mv dist-atomm/atomm.html dist-atomm/index.html && rm -f automaton-toy-designer-atomm.zip && cd dist-atomm && zip -qr ../automaton-toy-designer-atomm.zip . && cd .. && echo 'Upload automaton-toy-designer-atomm.zip in the atomm Developer Console'",
     "preview": "vite preview",
     "test": "vitest run"
   },
@@ -15,7 +16,7 @@
     "@react-three/fiber": "^9.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "three": "^0.178.0",
+    "three": "0.178.0",
     "zustand": "^5.0.0"
   },
   "devDependencies": {

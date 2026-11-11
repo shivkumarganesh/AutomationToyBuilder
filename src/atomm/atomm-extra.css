@@ -1,0 +1,60 @@
+/* Additions to the atomm template stylesheet for this generator.
+   Tokens only: every colour, radius, space and font below is a variable
+   the template defines. */
+
+#root { height: 100%; }
+
+/* the 3D view fills the stage; dragging orbits, so no text is ever selected */
+.atomm-stage-3d { display: block; cursor: default; user-select: none; -webkit-user-select: none; }
+.atomm-stage-3d canvas { display: block; }
+
+/* cut sheets on the artboard: drawn large enough to read */
+.atomm-sheet { direction: ltr; overflow: hidden; }
+.atomm-sheet svg { display: block; width: 100%; height: 100%; }
+.atomm-sheet svg path { stroke-width: 0.5; }
+.atomm-sheet svg #sheet-edges rect { stroke-width: 0.5; stroke-dasharray: 3 2; }
+
+/* assembly guide: a page on the canvas */
+.atomm-doc-wrap { position: absolute; inset: 0; overflow-y: auto; scrollbar-width: thin; padding: 64px var(--space-300) var(--space-300); }
+.atomm-doc {
+  max-width: 640px; margin: 0 auto; padding: var(--space-300);
+  background: var(--color-bg-default); border: 1px solid var(--color-stroke-default);
+  border-radius: var(--radius-large); box-shadow: var(--shadow-100);
+  color: var(--color-text-primary); font: var(--font-12-regular);
+}
+.atomm-doc h2 { margin: 0 0 var(--space-150); font: var(--font-16-semibold); }
+.atomm-doc h3 { margin: var(--space-200) 0 var(--space-100); font: var(--font-14-medium); }
+.atomm-doc ul, .atomm-doc ol { margin: 0; padding-inline-start: var(--space-250, 20px); }
+.atomm-doc li { margin-bottom: var(--space-75); color: var(--color-text-secondary); }
+.atomm-doc li > b { color: var(--color-text-primary); font-weight: 500; }
+
+/* motion choices in a lead panel's second level */
+.atomm-motion-list { display: flex; flex-direction: column; gap: var(--space-100); }
+.atomm-motion {
+  position: relative; display: flex; flex-direction: column; gap: var(--space-50); align-items: stretch;
+  padding: var(--space-100) var(--space-150); text-align: start; cursor: pointer;
+  background: var(--color-bg-default); border: 1px solid var(--color-stroke-divider);
+  border-radius: var(--radius-large); color: var(--color-text-primary); font: var(--font-12-regular);
+}
+.atomm-motion > span { display: flex; align-items: center; justify-content: space-between; gap: var(--space-100); }
+.atomm-motion b { font: var(--font-12-medium); }
+.atomm-motion small { color: var(--color-text-tertiary); font: var(--font-11-regular); }
+.atomm-motion:hover { border-color: var(--color-stroke-default); }
+.atomm-motion[aria-selected="true"] { box-shadow: inset 0 0 0 2px var(--color-brand-default); }
+
+/* traced figure preview */
+.atomm-trace {
+  height: 140px; padding: var(--space-150); display: grid; place-items: center;
+  background: var(--color-bg-control); border-radius: var(--radius-large); color: var(--color-text-secondary);
+}
+.atomm-trace svg { width: 100%; height: 100%; }
+
+/* figure tiles take their colour from the text token */
+.thumb-card svg { color: var(--color-text-secondary); }
+
+/* an alert inside a property card keeps the card's 16px inset */
+.atomm-card-alert { margin: var(--space-50) var(--space-200) var(--space-100); }
+.atomm-group + .atomm-group { border-top: 1px solid var(--color-stroke-divider); }
+
+/* standalone downloads share the footer slot */
+.atomm-downloads { display: flex; flex-direction: column; gap: var(--space-100); }
