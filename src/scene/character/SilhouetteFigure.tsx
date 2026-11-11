@@ -1,18 +1,33 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { ExtrudeGeometry, Shape, type Group } from 'three'
+import { BufferGeometry, ExtrudeGeometry, Float32BufferAttribute, Shape, type Group } from 'three'
 import type { CharacterSpec } from '../../model/types'
 import { camShaftY } from '../../model/types'
 import type { ChannelSignal } from '../../kinematics/channels'
 import { channelValue } from '../../kinematics/channels'
 import { samplePath } from '../../kinematics/linkage'
-import { DEFAULT_FIGURE_SHAPE, figureOutline } from '../../model/figures'
+import {
+  DEFAULT_FIGURE_SHAPE,
+  figureEngraving,
+  figureLayers,
+  figureOutline,
+} from '../../model/figures'
 import { HINGE_HEIGHT } from '../figureLayout'
 import { useDesignerStore } from '../../model/store'
 
 const PAD_THICKNESS = 4
 /** Cut/print thickness of the silhouette plate (one sheet). */
 export const SILHOUETTE_THICKNESS = 4
+
+/** Thickness of a glued-on detail plate (one sheet). */
+const LAYER_THICKNESS = 3
+
+/** A slightly deeper tone of a colour, for raised detail. */
+function shade(hex: string): string {
+  const n = parseInt(hex.slice(1), 16)
+  const f = (v: number) => Math.round(v * 0.8)
+  return `rgb(${f((n >> 16) & 255)},${f((n >> 8) & 255)},${f(n & 255)})`
+}
 
 /**
  * A flat silhouette figure from the curated library, standing upright
@@ -79,10 +94,49 @@ export function SilhouetteFigure({
     }
   })
 
+  // raised detail plates, one on each face, and the engraved lines
+  const detail = useMemo(() => {
+    const plates = figureLayers(shapeId, width, height).map((pts) => {
+      const shape = new Shape()
+      shape.moveTo(pts[0].x, pts[0].y)
+      for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y)
+      shape.closePath()
+      return new ExtrudeGeometry(shape, { depth: LAYER_THICKNESS, bevelEnabled: false })
+    })
+    const positions: number[] = []
+    for (const z of [SILHOUETTE_THICKNESS / 2 + 0.06, -SILHOUETTE_THICKNESS / 2 - 0.06]) {
+      for (const line of figureEngraving(shapeId, width, height)) {
+        for (let i = 0; i + 1 < line.length; i++) {
+          positions.push(line[i].x, line[i].y, z, line[i + 1].x, line[i + 1].y, z)
+        }
+      }
+    }
+    const lines = new BufferGeometry()
+    lines.setAttribute('position', new Float32BufferAttribute(positions, 3))
+    return { plates, lines, hasLines: positions.length > 0 }
+  }, [shapeId, width, height])
+
   const plate = (
-    <mesh geometry={geometry}>
-      <meshStandardMaterial color={color} />
-    </mesh>
+    <group>
+      <mesh geometry={geometry}>
+        <meshStandardMaterial color={color} />
+      </mesh>
+      {detail.plates.map((geo, i) => (
+        <group key={i}>
+          <mesh geometry={geo} position={[0, 0, SILHOUETTE_THICKNESS / 2]}>
+            <meshStandardMaterial color={shade(color)} />
+          </mesh>
+          <mesh geometry={geo} position={[0, 0, -SILHOUETTE_THICKNESS / 2 - LAYER_THICKNESS]}>
+            <meshStandardMaterial color={shade(color)} />
+          </mesh>
+        </group>
+      ))}
+      {detail.hasLines && (
+        <lineSegments geometry={detail.lines}>
+          <lineBasicMaterial color="#2b1a0e" transparent opacity={0.75} />
+        </lineSegments>
+      )}
+    </group>
   )
 
   if (signal.kind === 'tilt') {

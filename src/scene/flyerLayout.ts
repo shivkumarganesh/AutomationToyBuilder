@@ -223,6 +223,65 @@ export function flyerWingPlate(c: CharacterSpec, side: FlyerSide, index: number)
   return plate
 }
 
+/** Keep the parts of a polyline with from ≤ x ≤ to, as separate runs. */
+function clipLineX(line: Point2[], from: number, to: number): Point2[][] {
+  const runs: Point2[][] = []
+  let run: Point2[] = []
+  const inside = (p: Point2) => p.x >= from && p.x <= to
+  const cross = (a: Point2, b: Point2, x: number): Point2 => ({
+    x,
+    y: a.y + ((b.y - a.y) * (x - a.x)) / (b.x - a.x),
+  })
+  for (let i = 0; i + 1 < line.length; i++) {
+    let a = line[i]
+    let b = line[i + 1]
+    if ((a.x < from && b.x < from) || (a.x > to && b.x > to)) {
+      if (run.length > 1) runs.push(run)
+      run = []
+      continue
+    }
+    if (!inside(a)) a = cross(a, b, a.x < from ? from : to)
+    const bIn = inside(b)
+    if (!bIn) b = cross(line[i], b, b.x < from ? from : to)
+    if (run.length === 0) run.push(a)
+    run.push(b)
+    if (!bIn) {
+      if (run.length > 1) runs.push(run)
+      run = []
+    }
+  }
+  if (run.length > 1) runs.push(run)
+  return runs
+}
+
+/** Engraved lines on the body's top face, in flyerBodyOutline's frame. */
+export function flyerBodyEngraving(c: CharacterSpec): Point2[][] {
+  const shape = FLYER_SHAPES[c.shape ?? '']
+  if (!shape) return []
+  const mid = flyerRootMid(c)
+  return (shape.bodyEngrave ?? []).map((line) =>
+    line.map((p) => ({ x: p.x * c.width, y: p.y * c.depth - mid })),
+  )
+}
+
+/** Engraved ribs on one wing plate, clipped to it, in flyerWingPlate's frame. */
+export function flyerWingEngraving(c: CharacterSpec, side: FlyerSide, index: number): Point2[][] {
+  const shape = FLYER_SHAPES[c.shape ?? '']
+  if (!shape) return []
+  const chord = shape.chord * c.depth
+  const mid = flyerRootMid(c)
+  const from = side.hinges[index] + HINGE_GAP / 2 + 1
+  const to =
+    index + 1 < side.hinges.length ? side.hinges[index + 1] - HINGE_GAP / 2 - 1 : Infinity
+  return (shape.wingEngrave ?? []).flatMap((line) =>
+    clipLineX(
+      line.map((p) => ({ x: p.x * side.span, y: shape.wingY0 * c.depth + p.y * chord - mid })),
+      from,
+      to,
+    ),
+  )
+}
+
 /**
  * The post plate, standing: a shouldered strip with a tab at each end —
  * the bottom tab drops through the stage, the top tab through the body.

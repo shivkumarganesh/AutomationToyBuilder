@@ -137,3 +137,37 @@ describe('every shipped toy is buildable from 3 mm basswood', () => {
     }
   })
 })
+
+describe('detail survives the trip to the sheet', () => {
+  it('a figure with a raised layer cuts two detail plates and scores their footprint', async () => {
+    const { flatPackSvg } = await import('./svgFlatPack')
+    const { buildPrintParts } = await import('./stlExport')
+    const { FIGURE_SHAPES } = await import('../model/figures')
+    const spec = composeToy('whale', 'bob')
+    const whale = FIGURE_SHAPES.whale
+    const parts = generateParts(spec)
+    const figure = parts.find((p) => p.name === 'figure-figure-whale')!
+    // scored: every engraved line + one closed footprint per layer
+    expect(figure.engrave).toHaveLength(whale.engrave!.length + whale.layers!.length)
+    for (const line of figure.engrave!)
+      for (const p of line) {
+        expect(p.x).toBeGreaterThanOrEqual(-0.5)
+        expect(p.x).toBeLessThanOrEqual(figure.width + 0.5)
+        expect(p.y).toBeGreaterThanOrEqual(-0.5)
+        expect(p.y).toBeLessThanOrEqual(figure.height + 0.5)
+      }
+    const details = parts.filter((p) => p.name.startsWith('detail-figure-whale-'))
+    expect(details).toHaveLength(whale.layers!.length * 2)
+    for (const d of details) expect(auditPart(d)).toEqual([])
+    const svg = flatPackSvg(spec)
+    const score = /<g id="score"[^>]*>([\s\S]*?)<\/g>/.exec(svg)![1]
+    expect((score.match(/<path /g) ?? []).length).toBe(figure.engrave!.length)
+    // scored lines are open paths: never a closed cut
+    expect(score).not.toContain(' Z')
+    // printed: the layer is raised relief on the figure itself
+    const printed = buildPrintParts(spec).find((p) => p.name === 'figure-figure-whale')!
+    printed.geometry.computeBoundingBox()
+    const bb = printed.geometry.boundingBox!
+    expect(bb.max.z - bb.min.z).toBeCloseTo(4 + 1.2, 3)
+  })
+})

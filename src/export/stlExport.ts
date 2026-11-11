@@ -10,7 +10,7 @@ import type { ChannelSignal } from '../kinematics/channels'
 import { channelSignals } from '../kinematics/channels'
 import { rockerPivotY } from '../scene/rockerLayout'
 import { couplerPlateOutline, LINK_PIN_DIAMETER } from '../kinematics/linkage'
-import { DEFAULT_FIGURE_SHAPE, figureOutline } from '../model/figures'
+import { DEFAULT_FIGURE_SHAPE, figureLayers, figureOutline } from '../model/figures'
 import { propPlateOutline } from '../scene/propLayout'
 import { generateParts, type Part } from './svgFlatPack'
 import {
@@ -48,6 +48,8 @@ import {
  * cam holes use, so printed and cut parts are interchangeable.
  */
 
+/** Height of printed relief detail above a figure's face. */
+const RELIEF_HEIGHT = 1.2
 const FLAT_RATIO = 0.55
 const PAD_THICKNESS = 4
 
@@ -444,9 +446,17 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
       shape.moveTo(pts[0].x, pts[0].y)
       for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y)
       shape.closePath()
+      // detail plates print as raised relief on the top face, in one piece
+      const relief = figureLayers(c.shape ?? DEFAULT_FIGURE_SHAPE, c.width, c.height).map((layer) => {
+        const ls = new Shape()
+        ls.moveTo(layer[0].x, layer[0].y)
+        for (let i = 1; i < layer.length; i++) ls.lineTo(layer[i].x, layer[i].y)
+        ls.closePath()
+        return place(new ExtrudeGeometry(ls, { depth: RELIEF_HEIGHT, bevelEnabled: false }), 0, 0, 4)
+      })
       parts.push({
         name: `figure-${c.id}`,
-        geometry: new ExtrudeGeometry(shape, { depth: 4, bevelEnabled: false }),
+        geometry: merge([new ExtrudeGeometry(shape, { depth: 4, bevelEnabled: false }), ...relief]),
       })
       const signal = signals.find((sg) => sg.channel.id === c.channelId)
       if (signal?.kind === 'tilt') {

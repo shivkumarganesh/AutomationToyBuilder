@@ -250,3 +250,35 @@ describe('swimming fish: a segmented body on phase-lagged cams', () => {
     }
   })
 })
+
+describe('flyer engraving', () => {
+  it('wing ribs are clipped to their own plate and never cross a hinge', async () => {
+    const { flyerWingEngraving, flyerBodyEngraving } = await import('./flyerLayout')
+    for (const spec of [flyingBird, mantaRay, dragon]) {
+      const c = spec.characters[0]
+      const geo = flyerGeometry(spec, c, channelSignals(spec))!
+      expect(flyerBodyEngraving(c).length).toBeGreaterThan(0)
+      let ribs = 0
+      for (const side of [geo.left, geo.right]) {
+        side.hinges.forEach((h, i) => {
+          const plate = flyerWingPlate(c, side, i)
+          const minX = Math.min(...plate.map((p) => p.x))
+          const maxX = Math.max(...plate.map((p) => p.x))
+          for (const line of flyerWingEngraving(c, side, i)) {
+            ribs++
+            expect(line.length).toBeGreaterThanOrEqual(2)
+            for (const p of line) {
+              expect(p.x).toBeGreaterThanOrEqual(minX)
+              expect(p.x).toBeLessThanOrEqual(maxX)
+            }
+          }
+          expect(h).toBeLessThan(maxX)
+        })
+      }
+      expect(ribs).toBeGreaterThan(0)
+      // and they reach the cut file
+      const wings = generateParts(spec).filter((p) => p.name.startsWith(`wing-${c.id}-`))
+      expect(wings.some((w) => (w.engrave ?? []).length > 0)).toBe(true)
+    }
+  })
+})
