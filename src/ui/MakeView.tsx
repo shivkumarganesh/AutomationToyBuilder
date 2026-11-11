@@ -5,6 +5,9 @@ import { useDesignerStore } from '../model/store'
 import { flatPackSvg } from '../export/svgFlatPack'
 import { exportStl, layoutPrintParts, PRINT_PLATE_WIDTH } from '../export/stlExport'
 import { buildGuide, guideHtml, type PartGroup } from '../export/buildGuide'
+import { BASSWOOD, basswoodAudit } from '../export/basswood'
+import { channelSignals } from '../kinematics/channels'
+import { flyerIssues } from '../scene/flyerLayout'
 import { serializeSpec, shareUrl } from '../model/persistence'
 import { downloadFile } from '../export/download'
 import { NumberField } from './NumberField'
@@ -22,7 +25,7 @@ const PART_COLORS: Record<PartGroup, string> = {
 function groupColor(name: string): string {
   if (name.startsWith('frame-')) return PART_COLORS.Box
   if (name.startsWith('prop-')) return PART_COLORS.Scenery
-  if (/^(figure-|limb-|axle-|wire-|hinge-stand)/.test(name)) return PART_COLORS.Figures
+  if (/^(figure-|limb-|axle-|wire-|hinge-stand|body-|post-|wing-)/.test(name)) return PART_COLORS.Figures
   return PART_COLORS.Mechanism
 }
 
@@ -82,6 +85,14 @@ export function MakeView() {
 
   const guide = useMemo(() => buildGuide(spec, method), [spec, method])
   const svg = useMemo(() => (method === 'laser' ? flatPackSvg(spec) : ''), [spec, method])
+  // the same audit the test-suite runs on every shipped toy
+  const audit = useMemo(() => (method === 'laser' ? basswoodAudit(spec) : []), [spec, method])
+  const motionIssues = useMemo(() => {
+    const signals = channelSignals(spec)
+    return spec.characters.flatMap((c) =>
+      c.kind === 'flyer' ? flyerIssues(spec, c, signals).map((m) => `${c.label}: ${m}`) : [],
+    )
+  }, [spec])
   const slug = spec.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
   const partCount = guide.parts.reduce((n, p) => n + p.qty, 0)
 
@@ -128,7 +139,7 @@ export function MakeView() {
             onClick={() => setMethod('laser')}
           >
             <span className="card-name">Laser cut</span>
-            <span className="card-blurb">Flat plywood or MDF parts that slot together. One SVG file.</span>
+            <span className="card-blurb">Flat 3 mm basswood parts that slot together. One SVG file.</span>
           </button>
           <button
             role="radio"
@@ -143,7 +154,7 @@ export function MakeView() {
 
         <div className="section-body settings">
           <NumberField
-            label={method === 'laser' ? 'Sheet thickness' : 'Wall thickness'}
+            label={method === 'laser' ? 'Sheet thickness (checked for 3 mm)' : 'Wall thickness'}
             value={spec.frame.materialThickness}
             min={2}
             max={6}
@@ -182,6 +193,42 @@ export function MakeView() {
             </>
           )}
         </div>
+
+        {method === 'laser' &&
+          (audit.length === 0 ? (
+            <div className="check ok">
+              <b>✓ Ready for {BASSWOOD.thickness} mm basswood</b>
+              <span>
+                {partCount} parts on {guide.sheets} sheet{guide.sheets === 1 ? '' : 's'} of{' '}
+                {BASSWOOD.sheetWidth} × {BASSWOOD.sheetHeight} mm. No neck under{' '}
+                {BASSWOOD.minWeb} mm, no hole within {BASSWOOD.minLigament} mm of an edge.
+              </span>
+            </div>
+          ) : (
+            <div className="check bad">
+              <b>
+                {audit.length} thing{audit.length === 1 ? '' : 's'} to fix before cutting basswood
+              </b>
+              <ul>
+                {audit.slice(0, 6).map((i) => (
+                  <li key={`${i.part}-${i.rule}`}>
+                    <span className="mono">{i.part}</span> {i.message}
+                  </li>
+                ))}
+              </ul>
+              {audit.length > 6 && <span>…and {audit.length - 6} more.</span>}
+            </div>
+          ))}
+        {motionIssues.length > 0 && (
+          <div className="check bad">
+            <b>The mechanism needs a tweak</b>
+            <ul>
+              {motionIssues.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="export-buttons">
           {method === 'laser' ? (
@@ -235,8 +282,9 @@ export function MakeView() {
           (method === 'laser' ? (
             <div className="sheet-wrap">
               <p className="hint">
-                {guide.footprint.width} × {guide.footprint.height} mm of {spec.frame.materialThickness} mm
-                sheet · red = cut · blue = engraved labels
+                {guide.sheets} sheet{guide.sheets === 1 ? '' : 's'} of {guide.footprint.width} ×{' '}
+                {guide.footprint.height} mm, {spec.frame.materialThickness} mm thick · red = cut · blue =
+                engraved labels · green = sheet edge (not cut)
               </p>
               <div className="sheet" dangerouslySetInnerHTML={{ __html: svg }} />
             </div>

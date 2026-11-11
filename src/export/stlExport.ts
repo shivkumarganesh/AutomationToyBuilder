@@ -428,6 +428,15 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
 
   const signals = channelSignals(spec)
   for (const c of spec.characters) {
+    if (c.kind === 'flyer') {
+      // body, post and wing plates: the laser outlines with clearance fits
+      const fit = { ...spec, export: { ...spec.export, kerf: -2 * clearance } }
+      for (const p of generateParts(fit)) {
+        if (new RegExp(`^(body|post|wing)-${c.id}(-|$)`).test(p.name))
+          parts.push({ name: p.name, geometry: plateFromPart(p, spec.frame.materialThickness) })
+      }
+      continue
+    }
     if (c.kind === 'silhouette') {
       // flat library outline, printed lying down like the limb plates
       const pts = figureOutline(c.shape ?? DEFAULT_FIGURE_SHAPE, c.width, c.height)

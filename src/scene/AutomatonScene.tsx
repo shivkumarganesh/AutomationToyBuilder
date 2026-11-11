@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Grid, OrbitControls } from '@react-three/drei'
 import { useDesignerStore } from '../model/store'
@@ -17,6 +18,7 @@ import { FigureBlock } from './character/FigureBlock'
 import { ArticulatedFigure } from './character/ArticulatedFigure'
 import { SilhouetteFigure } from './character/SilhouetteFigure'
 import { Prop } from './scenery/Prop'
+import { FlyerFigure } from './character/FlyerFigure'
 
 /**
  * The 3D view, composed as the two zones joined by the frame:
@@ -25,9 +27,14 @@ import { Prop } from './scenery/Prop'
 export function AutomatonScene() {
   const spec = useDesignerStore((s) => s.spec)
   const channels = useChannels()
+  // flyers are top-view creatures: open looking down on them (the camera
+  // is only placed on mount, so orbiting is never overridden)
+  const [startCamera] = useState<[number, number, number]>(() =>
+    spec.characters.some((c) => c.kind === 'flyer') ? [150, 330, 215] : [215, 185, 250],
+  )
 
   return (
-    <Canvas shadows camera={{ position: [215, 185, 250], fov: 40 }}>
+    <Canvas shadows camera={{ position: startCamera, fov: 40 }}>
       <color attach="background" args={['#191d24']} />
       <ambientLight intensity={0.55} />
       <directionalLight position={[120, 220, 140]} intensity={1.4} />
@@ -71,6 +78,9 @@ export function AutomatonScene() {
           const siblings = spec.characters.filter((c) => c.channelId === character.channelId)
           const index = siblings.indexOf(character)
           const zOffset = (index - (siblings.length - 1) / 2) * (character.depth + 4)
+          if (character.kind === 'flyer') {
+            return <FlyerFigure key={character.id} character={character} signals={channels} />
+          }
           if (character.kind === 'silhouette') {
             return (
               <SilhouetteFigure

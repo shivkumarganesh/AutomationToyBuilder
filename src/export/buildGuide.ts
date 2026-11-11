@@ -2,8 +2,9 @@ import type { AutomatonSpec } from '../model/types'
 import { interiorWidth, outputChannels } from '../model/types'
 import { FIGURE_SHAPES } from '../model/figures'
 import { PROP_SHAPES } from '../model/props'
-import { flatPackSvg, generateParts, pushrodLayers } from './svgFlatPack'
+import { generateParts, packSheets, pushrodLayers, SHEET_HEIGHT, SHEET_WIDTH } from './svgFlatPack'
 import { buildPrintParts } from './stlExport'
+import { HINGE_GAP } from '../scene/flyerLayout'
 
 /**
  * The build guide: everything a maker needs besides the cut/print file —
@@ -11,6 +12,11 @@ import { buildPrintParts } from './stlExport'
  * the SAME spec and the SAME part generators as the exports, so the
  * guide can never describe a part the file does not contain.
  */
+
+const HINGE_TAPE = {
+  item: 'Cloth hinge tape (bookbinding or medical tape), about 300 mm',
+  detail: 'Makes the wing hinges: stuck across the gap on the underside of the plates.',
+}
 
 export type BuildMethod = 'laser' | 'print'
 
@@ -43,14 +49,16 @@ export interface BuildGuide {
   hardware: HardwareRow[]
   tools: string[]
   steps: GuideStep[]
-  /** Laser: sheet area the flat-pack needs. Print: largest part footprint. */
+  /** Laser: the sheet size parts are nested onto. Print: largest part footprint. */
   footprint: { width: number; height: number }
+  /** Laser: how many sheets the kit needs (0 for the print route). */
+  sheets: number
 }
 
 function groupOf(name: string): PartGroup {
   if (/^(frame-)?(side-|wall-|stage|bottom)/.test(name)) return 'Box'
   if (name.startsWith('prop-')) return 'Scenery'
-  if (/^(figure-|limb-|axle-|wire-|hinge-stand|body-|stand-)/.test(name)) return 'Figures'
+  if (/^(figure-|limb-|axle-|wire-|hinge-stand|body-|stand-|post-|wing-)/.test(name)) return 'Figures'
   return 'Mechanism'
 }
 
@@ -83,6 +91,9 @@ const LABELS: [RegExp, string][] = [
   [/^linkage-post/, 'Linkage pivot post'],
   [/^linkage-pin/, 'Linkage pin'],
   [/^hinge-stand/, 'Hinge stand'],
+  [/^body-/, 'Body plate'],
+  [/^post-/, 'Body post'],
+  [/^wing-/, 'Wing plate'],
   [/^figure-/, 'Figure'],
   [/^prop-/, 'Scenery'],
   [/^axle-/, 'Limb axle'],
@@ -152,16 +163,17 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
   const channels = outputChannels(spec)
   const laser = method === 'laser'
   const articulated = spec.characters.filter((c) => c.kind === 'articulated')
+  const flyers = spec.characters.filter((c) => c.kind === 'flyer')
   const shaftLen = frame.width + 24
 
   // ---- parts, straight from the generators ----
   let parts: PartRow[]
   let footprint: { width: number; height: number }
+  let sheets = 0
   if (laser) {
     parts = collect(generateParts(spec).map((p) => ({ name: p.name, w: p.width, h: p.height })))
-    const svg = flatPackSvg(spec)
-    const size = /width="([\d.]+)mm" height="([\d.]+)mm"/.exec(svg)
-    footprint = { width: Math.ceil(Number(size?.[1] ?? 0)), height: Math.ceil(Number(size?.[2] ?? 0)) }
+    sheets = packSheets(spec).length
+    footprint = { width: SHEET_WIDTH, height: SHEET_HEIGHT }
   } else {
     const built = buildPrintParts(spec).map((p) => {
       p.geometry.computeBoundingBox()
@@ -182,8 +194,9 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
   const hardware: HardwareRow[] = []
   if (laser) {
     hardware.push({
-      item: `${t} mm plywood or MDF sheet`,
-      detail: `All parts nest in about ${footprint.width} × ${footprint.height} mm.`,
+      item: `${t} mm basswood sheet, ${SHEET_WIDTH} × ${SHEET_HEIGHT} mm × ${sheets}`,
+      detail:
+        'Every part is nested onto sheets of this size and checked for basswood: no thin necks, no holes near edges. Plywood or MDF of the same thickness also works.',
     })
     hardware.push({
       item: `${m.shaftDiameter} mm round dowel, ${shaftLen} mm long`,
@@ -220,6 +233,7 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
         detail: 'Bent into the limb cranks. Plus 3 mm dowel for the limb axles.',
       })
     hardware.push({ item: 'Wood glue (PVA)', detail: 'For the box joints, laminations and figures.' })
+    if (flyers.length > 0) hardware.push(HINGE_TAPE)
     hardware.push({
       item: 'Candle wax or dry soap',
       detail: 'Rubbed on cam edges and inside guide slots so everything glides.',
@@ -240,6 +254,7 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
         item: 'Nothing else to buy',
         detail: 'The box, shaft, crank and every moving part are in the STL.',
       })
+    if (flyers.length > 0) hardware.push(HINGE_TAPE)
     hardware.push({
       item: 'Superglue (optional)',
       detail: 'A drop on the box joints and figures once everything runs freely.',
@@ -262,7 +277,8 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
       ? {
           title: 'Cut the parts',
           body: [
-            `Load ${t} mm sheet and cut the SVG: red lines are cuts, blue text is engraved labels (or skip the engraving).`,
+            `Load ${t} mm basswood and cut the SVG one sheet at a time: red lines are cuts, blue text is engraved labels (or skip them), green rectangles mark each sheet's edge and are not cut.`,
+            'Lay parts with long thin shapes along the grain where you can — basswood is strongest that way.',
             `The file is compensated for a ${spec.export.kerf} mm kerf. If joints come out loose or too tight, change the kerf setting and re-export.`,
             'Lightly sand the scorched edges. Keep the small parts together in a tray.',
           ],
@@ -289,6 +305,14 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
         ],
       })
   }
+
+  if (laser && spec.mechanism.cams.some((c) => Math.round(c.thickness / t) > 1))
+    steps.push({
+      title: 'Laminate the cams',
+      body: [
+        'Each cam is cut as two or more identical discs. Glue them face to face with the D-shaped holes lined up — slide them onto the shaft while the glue sets to keep them square.',
+      ],
+    })
 
   steps.push({
     title: 'Dry-fit the box',
@@ -378,6 +402,14 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
           ? `the ${FIGURE_SHAPES[c.shape ?? '']?.label.toLowerCase() ?? 'figure'} “${c.label}”`
           : `“${c.label}”`
       if (!ch) continue
+      if (c.kind === 'flyer') {
+        body.push(
+          `Build ${what}: press the post's lower tab into its stage slot and the body plate onto the upper tab, nose to the front. Check the body sits level, then glue.`,
+          `Lay each wing plate beside the body, ${HINGE_GAP} mm apart (a coin edge makes a good spacer), top face down, and stick hinge tape across every gap on the UNDERSIDE. The wings must flop freely.`,
+          'Round the top of each pushrod with sandpaper. Rest each wing plate on its rod — gravity keeps it there. Do not glue the wings to the rods.',
+        )
+        continue
+      }
       if (c.kind === 'articulated')
         body.push(
           `Build ${what}: glue the body to its stand over “${ch.id}”, push the axles through the body, fit the limb plates, and hook each wire crank from its rod to the limb pin.`,
@@ -416,7 +448,7 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
     ],
   })
 
-  return { method, parts, hardware, tools, steps, footprint }
+  return { method, parts, hardware, tools, steps, footprint, sheets }
 }
 
 /** The whole guide as a self-contained printable HTML page. */

@@ -32,6 +32,14 @@ export interface FrameSpec {
   materialThickness: number
 }
 
+/**
+ * How far the stage plate overhangs the walls on every side. The wall
+ * tabs come up through slots in the stage; without a lip those slots
+ * would sit flush with the stage edge and the sliver beside them would
+ * burn away. The lip leaves solid wood outside every slot.
+ */
+export const STAGE_LIP = 4
+
 export type CamKind = 'eccentric' | 'petal' | 'snail'
 
 interface CamBase {
@@ -278,8 +286,12 @@ export interface CharacterSpec {
    * pivots on the body and is driven by a channel through a wire linkage.
    * silhouette: a flat outline figure from the curated shape library,
    * riding its channel bodily like a block — the laser-kit style.
+   * flyer: a creature seen from above — a flat body on a fixed post with
+   * hinged wing plates, each resting on its own pushrod (see `flyer`).
+   * For a flyer `width` is the body width, `depth` the body length and
+   * `height` how far the wing tip overhangs its outermost rod.
    */
-  kind: 'block' | 'articulated' | 'silhouette'
+  kind: 'block' | 'articulated' | 'silhouette' | 'flyer'
   width: number
   height: number
   depth: number
@@ -287,8 +299,14 @@ export interface CharacterSpec {
   label: string
   /** articulated only: the jointed limbs. */
   limbs?: LimbSpec[]
-  /** silhouette only: shape id from the figure library. */
+  /** silhouette: shape id from the figure library. flyer: id from the flyer library. */
   shape?: string
+  /**
+   * flyer only: the LIFT channels under each wing, inner → outer. One
+   * id per side flaps a single plate; two per side make a two-plate
+   * wing that ripples. `channelId` always equals `left[0]`.
+   */
+  flyer?: { left: string[]; right: string[] }
 }
 
 /**

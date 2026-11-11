@@ -207,8 +207,8 @@ export const nodAndSpin: AutomatonSpec = {
       channelId: 'rock-nod',
       kind: 'silhouette',
       shape: 'bird',
-      width: 34,
-      height: 26,
+      width: 40,
+      height: 31,
       depth: 14,
       color: '#4fb06a',
       label: 'Nodding Bird',
@@ -355,9 +355,11 @@ export const bevelCarousel: AutomatonSpec = {
         wheelRadius: 14,
         platformRadius: 30,
         drive: 'bevel',
-        crownTeeth: 24,
+        // 16:8 at module 2.25 — teeth and tooth tabs wide enough to cut
+        // from 3 mm basswood (tab ≥ 3 mm, pinion wall ≥ 2 mm)
+        crownTeeth: 16,
         pinionTeeth: 8,
-        module: 1.5,
+        module: 2.25,
       },
     ],
   },
@@ -648,6 +650,235 @@ export const soaringGull: AutomatonSpec = {
   },
 }
 
+const CRANK = { armLength: 25, handleLength: 30, handleDiameter: 10 }
+
+/** A plain eccentric cam + pushrod pair for a wing plate or body segment. */
+function wingDrive(
+  id: string,
+  position: number,
+  eccentricity: number,
+  phaseDeg: number,
+  length: number,
+  radius = 18,
+) {
+  return {
+    cam: {
+      id: `cam-${id}`,
+      kind: 'eccentric' as const,
+      radius,
+      eccentricity,
+      position,
+      phaseDeg,
+      thickness: 6,
+    },
+    rod: { id: `rod-${id}`, camId: `cam-${id}`, rodWidth: 6, padWidth: 16, length },
+  }
+}
+
+/**
+ * Flying Bird — the classic first articulated automaton: the body sits
+ * still on a post while two pushrods lift its hinged wings together.
+ * Rod positions are 31 mm either side of centre: 9 mm to the hinge
+ * (half the body + half the hinge gap) plus a 22 mm lever arm.
+ */
+export const flyingBird: AutomatonSpec = (() => {
+  const inner = 160 - 6
+  const drives = [
+    wingDrive('wing-l', 0.5 - 31 / inner, 6, 0, 95),
+    wingDrive('wing-r', 0.5 + 31 / inner, 6, 0, 95),
+  ]
+  return {
+    name: 'Flying Bird',
+    frame: { width: 160, depth: 80, height: 100, materialThickness: 3 },
+    mechanism: {
+      shaftDiameter: 6,
+      shaftHeight: 50,
+      crank: { ...CRANK },
+      cams: drives.map((d) => d.cam),
+      pushrods: drives.map((d) => d.rod),
+      rockers: [],
+      spinners: [],
+    },
+    characters: [
+      {
+        id: 'figure-bird',
+        channelId: 'rod-wing-l',
+        kind: 'flyer',
+        shape: 'bird',
+        width: 16,
+        height: 24,
+        depth: 68,
+        color: '#e0a54f',
+        label: 'Bird',
+        flyer: { left: ['rod-wing-l'], right: ['rod-wing-r'] },
+      },
+    ],
+    props: [
+      {
+        id: 'prop-hills',
+        shape: 'hills',
+        position: 0.5,
+        row: 'back',
+        width: 120,
+        height: 30,
+        color: '#6f9a5a',
+      },
+    ],
+    export: { kerf: 0.1, fdmClearance: 0.2 },
+  }
+})()
+
+/**
+ * Manta Ray — two plates per wing, four rods. The outer cams trail the
+ * inner ones by 50°, so a wave rolls out along each wing. Hinge at
+ * ±12 mm; rods at ±30 mm and ±56 mm (lever arms 18 and 44 mm), the
+ * mid-wing hinge derived halfway between them.
+ */
+export const mantaRay: AutomatonSpec = (() => {
+  const inner = 180 - 6
+  const drives = [
+    wingDrive('l-outer', 0.5 - 56 / inner, 8, 50, 95),
+    wingDrive('l-inner', 0.5 - 30 / inner, 4, 0, 95),
+    wingDrive('r-inner', 0.5 + 30 / inner, 4, 0, 95),
+    wingDrive('r-outer', 0.5 + 56 / inner, 8, 50, 95),
+  ]
+  return {
+    name: 'Manta Ray',
+    frame: { width: 180, depth: 90, height: 100, materialThickness: 3 },
+    mechanism: {
+      shaftDiameter: 6,
+      shaftHeight: 50,
+      crank: { ...CRANK },
+      cams: drives.map((d) => d.cam),
+      pushrods: drives.map((d) => d.rod),
+      rockers: [],
+      spinners: [],
+    },
+    characters: [
+      {
+        id: 'figure-manta',
+        channelId: 'rod-l-inner',
+        kind: 'flyer',
+        shape: 'manta',
+        width: 22,
+        height: 16,
+        depth: 74,
+        color: '#c8793a',
+        label: 'Manta ray',
+        flyer: { left: ['rod-l-inner', 'rod-l-outer'], right: ['rod-r-inner', 'rod-r-outer'] },
+      },
+    ],
+    props: [
+      {
+        id: 'prop-waves',
+        shape: 'waves',
+        position: 0.5,
+        row: 'front',
+        width: 120,
+        height: 14,
+        color: '#4fa9c9',
+      },
+    ],
+    export: { kerf: 0.1, fdmClearance: 0.2 },
+  }
+})()
+
+/**
+ * Dragon — bat wings in two plates each on four rods, beating with a
+ * 40° lag between wrist and shoulder. Hinge at ±8 mm; rods at ±28 mm
+ * and ±54 mm.
+ */
+export const dragon: AutomatonSpec = (() => {
+  const inner = 180 - 6
+  const drives = [
+    wingDrive('l-outer', 0.5 - 54 / inner, 9, 40, 100),
+    wingDrive('l-inner', 0.5 - 28 / inner, 5, 0, 100),
+    wingDrive('r-inner', 0.5 + 28 / inner, 5, 0, 100),
+    wingDrive('r-outer', 0.5 + 54 / inner, 9, 40, 100),
+  ]
+  return {
+    name: 'Dragon',
+    frame: { width: 180, depth: 90, height: 100, materialThickness: 3 },
+    mechanism: {
+      shaftDiameter: 6,
+      shaftHeight: 50,
+      crank: { ...CRANK },
+      cams: drives.map((d) => d.cam),
+      pushrods: drives.map((d) => d.rod),
+      rockers: [],
+      spinners: [],
+    },
+    characters: [
+      {
+        id: 'figure-dragon',
+        channelId: 'rod-l-inner',
+        kind: 'flyer',
+        shape: 'dragon',
+        width: 14,
+        height: 14,
+        depth: 112,
+        color: '#a8623a',
+        label: 'Dragon',
+        flyer: { left: ['rod-l-inner', 'rod-l-outer'], right: ['rod-r-inner', 'rod-r-outer'] },
+      },
+    ],
+    export: { kerf: 0.1, fdmClearance: 0.2 },
+  }
+})()
+
+/**
+ * Swimming Fish — the body is cut into four segments, each on its own
+ * pushrod; every cam trails the one ahead by 60°, so a wave travels
+ * from head to tail. Rod positions follow each segment's mounting stem.
+ */
+export const swimmingFish: AutomatonSpec = (() => {
+  const inner = 160 - 6
+  const at = (x: number) => 0.5 + x / inner
+  const segments = [
+    { id: 'tail', shape: 'fish-tail', x: -27, phase: 180, w: 24, h: 37, label: 'Fish tail' },
+    { id: 'rear', shape: 'fish-rear', x: -10, phase: 120, w: 18, h: 37, label: 'Fish body (rear)' },
+    { id: 'front', shape: 'fish-front', x: 10, phase: 60, w: 18, h: 43, label: 'Fish body (front)' },
+    { id: 'head', shape: 'fish-head', x: 30, phase: 0, w: 20, h: 36, label: 'Fish head' },
+  ]
+  const drives = segments.map((sg) => wingDrive(sg.id, at(sg.x), 4, sg.phase, 42, 16))
+  return {
+    name: 'Swimming Fish',
+    frame: { width: 160, depth: 80, height: 100, materialThickness: 3 },
+    mechanism: {
+      shaftDiameter: 6,
+      shaftHeight: 50,
+      crank: { ...CRANK },
+      cams: drives.map((d) => d.cam),
+      pushrods: drives.map((d) => d.rod),
+      rockers: [],
+      spinners: [],
+    },
+    characters: segments.map((sg) => ({
+      id: `figure-${sg.id}`,
+      channelId: `rod-${sg.id}`,
+      kind: 'silhouette' as const,
+      shape: sg.shape,
+      width: sg.w,
+      height: sg.h,
+      depth: 14,
+      color: '#e0764f',
+      label: sg.label,
+    })),
+    props: [
+      {
+        id: 'prop-waves',
+        shape: 'waves',
+        position: 0.5,
+        row: 'front',
+        width: 110,
+        height: 14,
+        color: '#4fa9c9',
+      },
+    ],
+    export: { kerf: 0.1, fdmClearance: 0.2 },
+  }
+})()
+
 export const templates: Record<string, AutomatonSpec> = {
   simplest: simplestAutomaton,
   woodpecker: snailWoodpecker,
@@ -657,4 +888,8 @@ export const templates: Record<string, AutomatonSpec> = {
   owl: steppingOwl,
   bird: flappingBird,
   gull: soaringGull,
+  flyingbird: flyingBird,
+  manta: mantaRay,
+  dragon,
+  fish: swimmingFish,
 }
