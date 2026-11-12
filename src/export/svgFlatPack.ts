@@ -12,6 +12,7 @@ import {
   crownPitchRadius,
   GENEVA_PIN_RADIUS,
   genevaWheelOutline,
+  drivenDiscRadius,
 } from '../scene/spinnerLayout'
 import {
   couplerPlateOutline,
@@ -533,6 +534,16 @@ export function generateParts(spec: AutomatonSpec): Part[] {
       width: b1.maxX - b1.minX,
       height: b1.maxY - b1.minY,
     })
+    // the driven disc on the bottom of the spindle: the wheel's rim turns it
+    const driven = growRadially(circle(0, 0, drivenDiscRadius(sp), 48), kerf / 2)
+    const b3 = bounds(driven)
+    parts.push({
+      name: `spinner-driven-${sp.id}`,
+      outline: translate(driven, -b3.minX, -b3.minY),
+      holes: [translate(circle(0, 0, (6 - kerf) / 2), -b3.minX, -b3.minY)],
+      width: b3.maxX - b3.minX,
+      height: b3.maxY - b3.minY,
+    })
     const platform = growRadially(circle(0, 0, sp.platformRadius, 72), kerf / 2)
     const b2 = bounds(platform)
     parts.push({
@@ -887,6 +898,9 @@ function characterParts(
         stack.scores.filter((e) => e.on === k).map((e) => e.item),
       ),
     )
+    // a rocking figure pivots on a stand glued to the stage
+    if (signals.find((sg) => sg.channel.id === c.channelId)?.kind === 'tilt')
+      out.push(stripPart(`hinge-stand-${c.id}`, c.width * 0.6, HINGE_HEIGHT + 2))
     return out
   }
 

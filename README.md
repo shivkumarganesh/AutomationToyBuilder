@@ -116,6 +116,20 @@ is one piece with its pin as a finger, crown-gear tooth tabs are ≥ 3 mm with a
 rim outside their mortises. Bought-in stock is limited to dowel (shafts,
 spindles), small pins, wire for the wire-linkage bird, and hinge tape.
 
+## Ready-made or make your own
+
+The home page has two tabs. **Ready-made toys** are finished designs.
+**Make your own · DIY** offers three ways in: line up a whole scene, start from
+one figure and a motion, or bring your own drawing (or open every mechanism
+control). All of them land in the same Design step and get instructions written
+for the toy that was actually built.
+
+`src/export/guideMatchesKit.test.ts` holds the instructions to the kit for every
+shipped toy and figure recipe, on both routes: every part the text names exists,
+layered figures are explained in gluing order, turntables get their drive part
+and a platform fitted after the stage, and neither route borrows the other's
+vocabulary.
+
 ## Scenes — line up a cast, lay out the stage
 
 - **Build a scene** (home page): click figures to line them up, give each a

@@ -48,6 +48,7 @@ export function Home() {
   const [studio, setStudio] = useState(false)
   const [own, setOwn] = useState<StudioResult | null>(null)
   const [motion, setMotion] = useState<MotionId | null>(null)
+  const [tab, setTab] = useState<'ready' | 'diy'>('ready')
 
   const open = (spec: Parameters<typeof loadTemplate>[0]) => {
     history.replaceState(null, '', location.pathname)
@@ -99,7 +100,7 @@ export function Home() {
         </p>
         <ol className="hero-steps">
           <li>
-            <b>1</b> Choose a creature
+            <b>1</b> Pick a toy or make your own
           </li>
           <li>
             <b>2</b> Tune the motion
@@ -116,56 +117,117 @@ export function Home() {
         </button>
       </section>
 
-      <section>
-        <h3 className="home-title">Easiest builds — cams and pushrods only, with a Christmas set</h3>
-        <div className="card-grid toys">{SIMPLE_TEMPLATES.map((key) => toyCard(key))}</div>
-      </section>
+      <div className="home-tabs" role="tablist" aria-label="How do you want to start?">
+        <button role="tab" aria-selected={tab === 'ready'} className={tab === 'ready' ? 'on' : ''} onClick={() => setTab('ready')}>
+          <b>Ready-made toys</b>
+          <span>Finished designs — open one, tweak it, make it</span>
+        </button>
+        <button role="tab" aria-selected={tab === 'diy'} className={tab === 'diy' ? 'on' : ''} onClick={() => setTab('diy')}>
+          <b>Make your own · DIY</b>
+          <span>Pick the figures, the motions and the scenery yourself</span>
+        </button>
+      </div>
 
-      <section>
-        <h3 className="home-title">Build a scene — line up a cast and bring it to life</h3>
-        <SceneBuilder onBuild={open} />
-      </section>
+      {tab === 'ready' && (
+        <>
+          <section>
+            <h3 className="home-title">Easiest builds — cams and pushrods only, with a Christmas set</h3>
+            <div className="card-grid toys">{SIMPLE_TEMPLATES.map((key) => toyCard(key))}</div>
+          </section>
 
-      <section>
-        <h3 className="home-title">Articulated creatures — wings and bodies that really move</h3>
-        <div className="card-grid toys">{ARTICULATED_TEMPLATES.map((key) => toyCard(key))}</div>
-      </section>
+          <section>
+            <h3 className="home-title">Articulated creatures — wings and bodies that really move</h3>
+            <div className="card-grid toys">{ARTICULATED_TEMPLATES.map((key) => toyCard(key))}</div>
+          </section>
 
-      <section>
-        <h3 className="home-title">Start with a figure</h3>
-        <div className="card-grid figures">
-          {FIGURE_ORDER.filter((id) => FIGURE_SHAPES[id]).map((id) => (
-            <button
-              key={id}
-              className={`card figure-card${picked === id ? ' selected' : ''}`}
-              onClick={() => {
-                setPicked(id)
-                setMotion(null)
-              }}
-            >
-              <FigureThumb shape={id} color={FIGURE_INFO[id]?.color ?? '#e0a54f'} size={96} />
-              <span className="card-name">{FIGURE_SHAPES[id].label}</span>
-              <span className="card-blurb">{FIGURE_INFO[id]?.blurb}</span>
+          <section>
+            <h3 className="home-title">More ready-made toys</h3>
+            <div className="card-grid toys">
+              {Object.keys(templates)
+                .filter((key) => !ARTICULATED_TEMPLATES.includes(key) && !SIMPLE_TEMPLATES.includes(key))
+                .map((key) => toyCard(key))}
+            </div>
+          </section>
+
+          <p className="diy-nudge">
+            Want something that is not here?{' '}
+            <button className="link" onClick={() => setTab('diy')}>
+              Make your own toy →
             </button>
-          ))}
-          <button className="card figure-card own-card" onClick={() => setStudio(true)}>
-            <span className="own-mark" aria-hidden="true">
-              ✎
-            </span>
-            <span className="card-name">Draw your own</span>
-            <span className="card-blurb">Sketch it or upload a picture — we trace it and check it will cut.</span>
-          </button>
-        </div>
-      </section>
+          </p>
+        </>
+      )}
 
-      <section>
-        <h3 className="home-title">More ready-made toys</h3>
-        <div className="card-grid toys">
-          {Object.keys(templates)
-            .filter((key) => !ARTICULATED_TEMPLATES.includes(key) && !SIMPLE_TEMPLATES.includes(key))
-            .map((key) => toyCard(key))}
-        </div>
-      </section>
+      {tab === 'diy' && (
+        <>
+          <ol className="diy-steps">
+            <li>
+              <b>1</b> Choose one of the three ways to start below
+            </li>
+            <li>
+              <b>2</b> Arrange the stage and tune each motion in the Design step
+            </li>
+            <li>
+              <b>3</b> Download the cut or print file with instructions written for your toy
+            </li>
+          </ol>
+
+          <section>
+            <h3 className="home-title">A · Line up a whole scene</h3>
+            <SceneBuilder onBuild={open} />
+          </section>
+
+          <section>
+            <h3 className="home-title">B · Start with one figure and choose how it moves</h3>
+            <div className="card-grid figures">
+              {FIGURE_ORDER.filter((id) => FIGURE_SHAPES[id]).map((id) => (
+                <button
+                  key={id}
+                  className={`card figure-card${picked === id ? ' selected' : ''}`}
+                  onClick={() => {
+                    setPicked(id)
+                    setMotion(null)
+                  }}
+                >
+                  <FigureThumb shape={id} color={FIGURE_INFO[id]?.color ?? '#e0a54f'} size={96} />
+                  <span className="card-name">{FIGURE_SHAPES[id].label}</span>
+                  <span className="card-blurb">{FIGURE_INFO[id]?.blurb}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="home-title">C · Bring your own figure</h3>
+            <div className="card-grid figures">
+              <button className="card figure-card own-card" onClick={() => setStudio(true)}>
+                <span className="own-mark" aria-hidden="true">
+                  ✎
+                </span>
+                <span className="card-name">Draw or upload your own</span>
+                <span className="card-blurb">
+                  Sketch it or upload a picture — we trace it, check it will cut, and give it depth.
+                </span>
+              </button>
+              <button
+                className="card figure-card own-card"
+                onClick={() => {
+                  open(templates.simplest)
+                  useUiStore.getState().setMode('advanced')
+                }}
+              >
+                <span className="own-mark" aria-hidden="true">
+                  ⚙
+                </span>
+                <span className="card-name">Tinker with the mechanism</span>
+                <span className="card-blurb">
+                  Open the simplest toy with every control showing: add cams, rockers, turntables, gears and linkages.
+                </span>
+              </button>
+            </div>
+          </section>
+        </>
+      )}
 
       {studio && (
         <ShapeStudio
