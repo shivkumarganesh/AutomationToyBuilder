@@ -1456,3 +1456,74 @@ button.ghost {
   flex-wrap: wrap;
   margin-top: 10px;
 }
+
+/* ---- home: ready-made or make-your-own ---- */
+.home-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 8px 0 4px;
+}
+.home-tabs button {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  cursor: pointer;
+}
+.home-tabs button b {
+  font-size: 17px;
+}
+.home-tabs button span {
+  font-size: 13px;
+  opacity: 0.7;
+}
+.home-tabs button.on {
+  border-color: #e0a54f;
+  background: rgba(224, 165, 79, 0.12);
+}
+.diy-steps {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  padding: 0;
+  margin: 14px 0 0;
+  font-size: 14px;
+  opacity: 0.9;
+}
+.diy-steps b {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e0a54f;
+  color: #1a1206;
+  font-size: 12px;
+  margin-right: 6px;
+}
+.diy-nudge {
+  opacity: 0.85;
+  margin: 18px 0;
+}
+button.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #e0a54f;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+@media (max-width: 640px) {
+  .home-tabs {
+    grid-template-columns: 1fr;
+  }
+}

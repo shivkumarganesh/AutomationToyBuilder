@@ -5,6 +5,8 @@ import { PROP_SHAPES } from '../model/props'
 import { generateParts, packSheets, pushrodLayers, SHEET_HEIGHT, SHEET_WIDTH } from './svgFlatPack'
 import { buildPrintParts } from './stlExport'
 import { HINGE_GAP, STITCH_HOLE } from '../scene/flyerLayout'
+import { figureStack } from '../scene/reliefLayout'
+import { contactOffset } from '../scene/spinnerLayout'
 
 /**
  * The build guide: everything a maker needs besides the cut/print file —
@@ -81,8 +83,9 @@ const LABELS: [RegExp, string][] = [
   [/^geneva-driver/, 'Geneva driver'],
   [/^geneva-pin/, 'Geneva drive pin'],
   [/^spinner-platform/, 'Turntable platform'],
+  [/^spinner-driven/, 'Driven disc (bottom of the spindle)'],
   [/^spinner-wheel/, 'Friction drive wheel'],
-  [/^spinner-spindle/, 'Spindle with platform'],
+  [/^spinner-spindle/, 'Spindle with its drive'],
   [/^pinion/, 'Pinion gear'],
   [/^crown-tooth/, 'Crown gear tooth'],
   [/^crown/, 'Crown gear'],
@@ -95,8 +98,10 @@ const LABELS: [RegExp, string][] = [
   [/^body-/, 'Body plate'],
   [/^post-/, 'Body post'],
   [/^wing-/, 'Wing plate'],
+  [/^figure-stand/, 'Body stand'],
+  [/^figure-.*-half[12]$/, 'Figure half (glue the pair back to back)'],
   [/^figure-/, 'Figure'],
-  [/^detail-/, 'Raised detail plate'],
+  [/^detail-/, 'Raised plate (glued onto the figure)'],
   [/^depth-/, 'Depth layer'],
   [/^prop-/, 'Scenery'],
   [/^axle-/, 'Limb axle'],
@@ -130,6 +135,22 @@ function collect(raw: { name: string; w: number; h: number }[]): PartRow[] {
   }
   const order: PartGroup[] = ['Box', 'Mechanism', 'Figures', 'Scenery']
   return [...rows.values()].sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group))
+}
+
+/** One line per kind of scenery and row, with a count — not one identical line per piece. */
+function sceneryLines(spec: AutomatonSpec): string[] {
+  const groups = new Map<string, number>()
+  for (const p of spec.props ?? []) {
+    const key = `${PROP_SHAPES[p.shape]?.label.toLowerCase() ?? 'scenery piece'}|${p.row}`
+    groups.set(key, (groups.get(key) ?? 0) + 1)
+  }
+  return [...groups].map(([key, n]) => {
+    const [label, row] = key.split('|')
+    const where = row === 'front' ? 'front row of stage slots (nearest you)' : 'back row of stage slots'
+    return n === 1
+      ? `Press the tabs of the ${label} into the ${where}.`
+      : `Press the tabs of the ${n} ${label} pieces into the ${where}; each fits only its own slots.`
+  })
 }
 
 /** Everything on the shaft, left to right, with its distance from the left inner wall. */
@@ -218,7 +239,7 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
     for (const sp of m.spinners)
       hardware.push({
         item: `6 mm dowel, about ${Math.round(frame.height + t + 12 - m.shaftHeight)} mm`,
-        detail: `Spindle for “${sp.id}”: from the drive up through the stage to the platform. Trim to fit.`,
+        detail: `Spindle for “${sp.id}”: its drive part is glued on the bottom end, it runs up through the stage, and the platform is glued on top. Trim to fit.`,
       })
     if ((m.linkages ?? []).length > 0)
       hardware.push({
@@ -325,6 +346,15 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
     ],
   })
 
+  if (laser && m.spinners.some((sp) => sp.drive === 'bevel'))
+    steps.push({
+      title: 'Build the crown gear',
+      body: [
+        'The crown gear is a disc with a ring of slots and a set of small tooth tabs. Push one tab through every slot, all standing out of the SAME face, with a dab of glue on each.',
+        'Check the tabs stand square to the disc and let it dry before it goes on the shaft.',
+      ],
+    })
+
   const order = shaftOrder(spec)
   steps.push({
     title: 'Load the camshaft',
@@ -364,18 +394,37 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
           `Rest the lever's pad on cam “${ch.cam.id}”. Hook the link rod to the lever; it rises through the stage slot to push the figure.`,
         ],
       })
-    else if (ch.kind === 'spin')
-      steps.push({
-        title: `Turntable “${ch.id}”`,
-        body: [
-          ch.spinner.drive === 'bevel'
-            ? 'Fit the pinion to the bottom of the spindle so its teeth mesh with the crown gear on the camshaft.'
-            : ch.spinner.drive === 'geneva'
-              ? 'Fit the Geneva wheel to the bottom of the spindle so the driver pin enters a slot once per crank turn.'
-              : 'Fit the driven disc to the bottom of the spindle so it rests on the rim of the friction wheel.',
-          'The spindle runs up through the round hole in the stage; the platform goes on top once the stage is fitted.',
-        ],
-      })
+    else if (ch.kind === 'spin') {
+      const drive = ch.spinner.drive ?? 'friction'
+      const body: string[] = []
+      if (drive === 'bevel') {
+        if (laser)
+          body.push(
+            'Glue the pinion gear onto the bottom end of the spindle dowel.',
+          )
+        else body.push('The spindle is printed with its pinion gear on the bottom end.')
+        body.push('Stand the spindle so the pinion meshes with the teeth standing out of the crown gear.')
+      } else if (drive === 'geneva') {
+        body.push(
+          laser
+            ? 'Glue the star-shaped Geneva wheel onto the bottom end of the spindle dowel.'
+            : 'The spindle is printed with the star-shaped Geneva wheel on its bottom end.',
+          'Stand the spindle so the finger of the driver on the camshaft enters a slot of the star once per crank turn and pushes it on one step.',
+        )
+      } else {
+        const off = Math.abs(Math.round(contactOffset(ch.spinner)))
+        body.push(
+          laser
+            ? 'Glue the small driven disc onto the bottom end of the spindle dowel.'
+            : 'The spindle is printed with its driven disc on the bottom end.',
+          `Stand the spindle so the disc rests flat on the rim of the friction wheel, with the wheel about ${off} mm to one side of the spindle — never directly under it, or nothing turns. A rubber band stretched round the wheel rim adds grip.`,
+        )
+      }
+      body.push(
+        'The spindle comes UP through the round hole in the stage when the stage is fitted. Only then does the platform go on: press (or glue) it onto the top of the spindle. Do not fit the platform first — it will not pass through the hole.',
+      )
+      steps.push({ title: `Turntable “${ch.id}”`, body })
+    }
     else
       steps.push({
         title: `Linkage “${ch.id}”`,
@@ -390,8 +439,10 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
   steps.push({
     title: 'Fit the stage and test',
     body: [
-      'Lower the stage plate over the rods, spindles and wands and press it onto the wall tabs.',
-      'Push the crank arm onto the shaft end, fit the handle, and turn slowly. Everything should move without sticking.',
+      `Lower the stage plate over the ${[pushrods.length > 0 || channels.some((c) => c.kind === 'tilt') ? 'rods' : '', m.spinners.length > 0 ? 'spindles' : '', (m.linkages ?? []).length > 0 ? 'wands' : ''].filter(Boolean).join(', ')} and press it onto the wall tabs.${m.spinners.length > 0 ? ' Now fit each turntable platform onto the top of its spindle.' : ''}`,
+      laser
+        ? 'Push the crank arm onto the shaft end, press the handle dowel into its round hole, and turn slowly. Everything should move without sticking.'
+        : 'Push the crank (arm and handle are one printed piece) onto the shaft end and turn slowly. Everything should move without sticking.',
       'If something binds: sand the slot or rod a little and add wax. Do not glue the stage until it all runs smoothly.',
     ],
   })
@@ -418,7 +469,9 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
       }
       if (c.kind === 'articulated')
         body.push(
-          `Build ${what}: glue the body to its stand over “${ch.id}”, push the axles through the body, fit the limb plates, and hook each wire crank from its rod to the limb pin.`,
+          laser
+            ? `Build ${what}: glue the body plate to its stand, and the stand to the top of “${ch.id}”. Cut a 3 mm dowel axle for each limb, push it through the body, and fit the limb plates on its ends. Bend each wire crank from the 2 mm wire and hook it from its rod to the limb.`
+            : `Build ${what}: the body is printed with its stand — glue the stand to the top of “${ch.id}”. Push each printed axle through the body, fit the limb plates on its ends, and hook each printed wire crank from its rod to the limb.`,
         )
       else if (ch.kind === 'lift') body.push(`Glue ${what} to the top of pushrod “${ch.id}”.`)
       else if (ch.kind === 'tilt')
@@ -428,19 +481,33 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
       else if (ch.kind === 'spin') body.push(`Glue ${what} onto the platform of “${ch.id}”.`)
       else body.push(`Glue ${what} to the tip of the wand of “${ch.id}”.`)
     }
-    if (laser && generateParts(spec).some((p) => p.name.startsWith('depth-')))
-      body.push(
-        'Build up the depth layers before mounting. Each figure plate is scored with the outline of the L1 layer: glue L1 inside that outline, then L2 inside the outline scored on L1, and so on. Do the same on the back with the “back” set, so the figure is rounded on both faces. On a winged creature the layers go on top of the body only.',
+    const names = parts.map((p) => p.name)
+    const prep: string[] = []
+    if (laser && names.some((n) => n.startsWith('depth-')))
+      prep.push(
+        'Build up the depth layers. Each figure plate is scored with the outline of the L1 layer: glue L1 inside that outline, then L2 inside the outline scored on L1, and so on. Do the same on the back with the “back” set, so the figure is rounded on both faces. On a winged creature the layers go on top of the body only.',
         'Let the stack dry under a weight, then soften the steps with sandpaper if you want a smoother body — or leave them crisp.',
       )
-    if (!laser && spec.characters.some((c) => c.kind === 'silhouette' && (c.relief ?? 0) > 0))
-      body.push(
-        'Figures with depth print as two halves (“half1” and “half2”), each flat on the bed with its rounded side up. Glue the two flat faces together, edges flush, before mounting.',
+    if (laser)
+      for (const c of spec.characters) {
+        if (c.kind !== 'silhouette') continue
+        const stack = figureStack(c)
+        if (stack.details.length === 0) continue
+        const stacked = stack.details.some((d) => d.rise > 0)
+        prep.push(
+          stacked
+            ? `“${c.label}” is built up from ${stack.details.length} raised plates on each face, in order: ${stack.details
+                .map((d, k) => `plate ${k + 1} (“detail-${c.id}-${k + 1}”) goes ${d.rise > 0 ? 'on top of the plate before it' : stack.levels.length > 0 ? 'on the top depth layer' : 'on the figure plate'}`)
+                .join('; ')}. Each piece is scored with the outline of the piece that goes on it — glue inside that outline. Where a plate reaches right to the edge there is no scored line: line it up with the edge instead. Use the “front” set on one face and the “back” set on the other.`
+            : `Glue the raised plate${stack.details.length > 1 ? 's' : ''} of “${c.label}” (“detail-${c.id}-…”) inside the outline${stack.details.length > 1 ? 's' : ''} scored for ${stack.details.length > 1 ? 'them' : 'it'} — on the ${stack.levels.length > 0 ? 'depth layer or figure plate that carries the outline' : 'figure plate'} — “front” on one face, “back” on the other.`,
+        )
+      }
+    if (!laser && names.some((n) => /-half[12]$/.test(n)))
+      prep.push(
+        'Layered and rounded figures print as two halves (“half1” and “half2”), each flat on the bed with its shaped side up. Glue the two flat faces together, edges flush.',
       )
-    if (laser && generateParts(spec).some((p) => p.name.startsWith('detail-')))
-      body.push(
-        'Glue each raised detail plate onto its figure, one on the front and its twin on the back, inside the outline scored on the face.',
-      )
+    if (prep.length > 0)
+      steps.push({ title: 'Build up the figures', body: [...prep, 'Let everything dry before mounting.'] })
     steps.push({ title: 'Mount the figures', body })
   }
 
@@ -448,10 +515,7 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
     steps.push({
       title: 'Add the scenery',
       body: [
-        ...(spec.props ?? []).map(
-          (p) =>
-            `Press the ${PROP_SHAPES[p.shape]?.label.toLowerCase() ?? 'prop'} tabs into the ${p.row} row of stage slots.`,
-        ),
+        ...sceneryLines(spec),
         'Turn the crank once more to check no figure touches the scenery.',
       ],
     })
@@ -461,7 +525,7 @@ export function buildGuide(spec: AutomatonSpec, method: BuildMethod): BuildGuide
     body: [
       'When it runs smoothly, take the stage off once more, glue the box joints, and refit it.',
       laser
-        ? 'Paint or stain the figures and scenery — acrylics work well on plywood.'
+        ? 'Paint or stain the figures and scenery — acrylics work well on basswood. Paint the pieces of a layered figure before gluing them together for crisp edges.'
         : 'Paint the figures and scenery, or reprint them in coloured filament.',
       'Turn the crank and enjoy!',
     ],

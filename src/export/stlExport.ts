@@ -1,4 +1,4 @@
-import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Mesh, Object3D, Shape } from 'three'
+import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Mesh, Object3D, Path, Shape } from 'three'
 import { STLExporter } from 'three/addons/exporters/STLExporter.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { AutomatonSpec, CharacterSpec, LimbSpec } from '../model/types'
@@ -61,6 +61,21 @@ import {
 const DEPTH_LAYER = 3
 /** Height of printed relief detail above a figure's face. */
 const RELIEF_HEIGHT = 1.2
+
+/**
+ * A turntable platform as its own part: it presses onto the top of the
+ * spindle AFTER the spindle has come up through the stage — a spindle
+ * with a platform on one end and its drive on the other could never be
+ * threaded through the hole.
+ */
+function platformDisc(radius: number, clearance: number): BufferGeometry {
+  const shape = new Shape()
+  shape.absarc(0, 0, radius, 0, Math.PI * 2, false)
+  const hole = new Path()
+  hole.absarc(0, 0, 3 + clearance / 2, 0, Math.PI * 2, true)
+  shape.holes.push(hole)
+  return new ExtrudeGeometry(shape, { depth: 4, bevelEnabled: false })
+}
 
 /** The mirror image of a solid, with its triangles turned back outward. */
 function mirrorX(solid: BufferGeometry): BufferGeometry {
@@ -302,10 +317,8 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
       const rod = new CylinderGeometry(3, 3, rodLen, 20)
       rod.rotateX(Math.PI / 2)
       place(rod, 0, 0, rodLen / 2)
-      const platform = new CylinderGeometry(sp.platformRadius, sp.platformRadius, 4, 48)
-      platform.rotateX(Math.PI / 2)
-      place(platform, 0, 0, rodLen - 2)
-      parts.push({ name: `spinner-spindle-${sp.id}`, geometry: merge([wheel, rod, platform]) })
+      parts.push({ name: `spinner-spindle-${sp.id}`, geometry: merge([wheel, rod]) })
+      parts.push({ name: `spinner-platform-${sp.id}`, geometry: platformDisc(sp.platformRadius, clearance) })
       continue
     }
     if (sp.drive === 'bevel') {
@@ -350,10 +363,8 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
       const rod = new CylinderGeometry(3, 3, rodLen, 20)
       rod.rotateX(Math.PI / 2)
       place(rod, 0, 0, rodLen / 2)
-      const platform = new CylinderGeometry(sp.platformRadius, sp.platformRadius, 4, 48)
-      platform.rotateX(Math.PI / 2)
-      place(platform, 0, 0, rodLen - 2)
-      parts.push({ name: `spinner-spindle-${sp.id}`, geometry: merge([pinion, rod, platform]) })
+      parts.push({ name: `spinner-spindle-${sp.id}`, geometry: merge([pinion, rod]) })
+      parts.push({ name: `spinner-platform-${sp.id}`, geometry: platformDisc(sp.platformRadius, clearance) })
       continue
     }
     const wheelShape = new Shape()
@@ -370,10 +381,8 @@ export function buildPrintParts(spec: AutomatonSpec): { name: string; geometry: 
     const driven = new CylinderGeometry(drivenDiscRadius(sp), drivenDiscRadius(sp), 4, 32)
     driven.rotateX(Math.PI / 2)
     place(driven, 0, 0, 2)
-    const platform = new CylinderGeometry(sp.platformRadius, sp.platformRadius, 4, 48)
-    platform.rotateX(Math.PI / 2)
-    place(platform, 0, 0, spindleLength - 2)
-    parts.push({ name: `spinner-spindle-${sp.id}`, geometry: merge([rod, driven, platform]) })
+    parts.push({ name: `spinner-spindle-${sp.id}`, geometry: merge([rod, driven]) })
+    parts.push({ name: `spinner-platform-${sp.id}`, geometry: platformDisc(sp.platformRadius, clearance) })
   }
 
   // Four-bar linkage parts: crank disc with pin, coupler+wand L-plate,
